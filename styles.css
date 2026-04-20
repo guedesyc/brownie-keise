@@ -418,3 +418,10 @@ th {
     grid-template-columns: 1fr;
   }
 }
+.hero-logo {
+  width: 180px;
+  height: 130px;
+  object-fit: contain;
+  border-radius: 24px;
+  background: transparent;
+}
