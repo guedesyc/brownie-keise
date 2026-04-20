@@ -1,4 +1,10 @@
 const STORAGE_KEY = "brownie-da-keise-app-v2";
+const editing = {
+  ingredientId: null,
+  recipeId: null,
+  movementId: null,
+  saleId: null,
+};
 
 const seedState = {
   ingredients: [
@@ -56,6 +62,8 @@ const els = {
   addRecipeItem: document.getElementById("add-recipe-item"),
   recipeItemTemplate: document.getElementById("recipe-item-template"),
   exportData: document.getElementById("export-data"),
+  exportExcel: document.getElementById("export-excel"),
+  importExcel: document.getElementById("import-excel"),
   importData: document.getElementById("import-data"),
   resetData: document.getElementById("reset-data"),
 };
@@ -106,6 +114,8 @@ function bindForms() {
   els.saleForm.addEventListener("submit", handleSaleSubmit);
   els.addRecipeItem.addEventListener("click", () => appendRecipeItem());
   els.exportData.addEventListener("click", exportData);
+  els.exportExcel.addEventListener("click", exportExcel);
+  els.importExcel.addEventListener("change", importExcelFile);
   els.importData.addEventListener("change", importData);
   els.resetData.addEventListener("click", resetData);
 }
@@ -241,21 +251,30 @@ function renderAll() {
   renderSalesSummary();
   renderFinance();
   renderKpis();
+  bindActionButtons();
 }
 
 function handleIngredientSubmit(event) {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
-  state.ingredients.push({
-    id: crypto.randomUUID(),
+  const ingredient = {
+    id: editing.ingredientId || crypto.randomUUID(),
     name: data.get("name").trim(),
     unit: data.get("unit"),
     packageQuantity: Number(data.get("packageQuantity")),
     packageCost: Number(data.get("packageCost")),
     notes: data.get("notes").trim(),
-  });
+  };
+  if (editing.ingredientId) {
+    const index = state.ingredients.findIndex((item) => item.id === editing.ingredientId);
+    state.ingredients[index] = ingredient;
+    editing.ingredientId = null;
+  } else {
+    state.ingredients.push(ingredient);
+  }
   saveState();
   event.currentTarget.reset();
+  resetFormButton(event.currentTarget, "Salvar insumo");
   renderAll();
 }
 
@@ -269,37 +288,54 @@ function handleRecipeSubmit(event) {
     }))
     .filter((item) => item.ingredientId && item.quantity > 0);
 
-  state.recipes.push({
-    id: crypto.randomUUID(),
+  const recipe = {
+    id: editing.recipeId || crypto.randomUUID(),
     name: data.get("name").trim(),
     yield: Number(data.get("yield")),
     salePrice: Number(data.get("salePrice") || 0),
     notes: data.get("notes").trim(),
     items,
-  });
+  };
+
+  if (editing.recipeId) {
+    const index = state.recipes.findIndex((item) => item.id === editing.recipeId);
+    state.recipes[index] = recipe;
+    editing.recipeId = null;
+  } else {
+    state.recipes.push(recipe);
+  }
 
   saveState();
   event.currentTarget.reset();
   els.recipeItems.innerHTML = "";
   appendRecipeItem();
+  resetFormButton(event.currentTarget, "Salvar sabor");
   renderAll();
 }
 
 function handleMovementSubmit(event) {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
-  state.movements.unshift({
-    id: crypto.randomUUID(),
+  const movement = {
+    id: editing.movementId || crypto.randomUUID(),
     ingredientId: data.get("ingredientId"),
     type: data.get("type"),
     quantity: Number(data.get("quantity")),
     amount: Number(data.get("amount") || 0),
     date: data.get("date"),
     notes: data.get("notes").trim(),
-  });
+  };
+  if (editing.movementId) {
+    const index = state.movements.findIndex((item) => item.id === editing.movementId);
+    state.movements[index] = movement;
+    editing.movementId = null;
+  } else {
+    state.movements.unshift(movement);
+  }
   saveState();
   event.currentTarget.reset();
   setToday(event.currentTarget.querySelector('[name="date"]'));
+  resetFormButton(event.currentTarget, "Salvar movimento");
   renderAll();
 }
 
@@ -312,17 +348,25 @@ function handleSaleSubmit(event) {
   const quantity = Number(data.get("quantity"));
   const amount = Number(data.get("amount") || recipe.salePrice * quantity);
 
-  state.sales.unshift({
-    id: crypto.randomUUID(),
+  const sale = {
+    id: editing.saleId || crypto.randomUUID(),
     recipeId: recipe.id,
     quantity,
     amount,
     date: data.get("date"),
     notes: data.get("notes").trim(),
-  });
+  };
+  if (editing.saleId) {
+    const index = state.sales.findIndex((item) => item.id === editing.saleId);
+    state.sales[index] = sale;
+    editing.saleId = null;
+  } else {
+    state.sales.unshift(sale);
+  }
   saveState();
   event.currentTarget.reset();
   setToday(event.currentTarget.querySelector('[name="date"]'));
+  resetFormButton(event.currentTarget, "Salvar venda");
   renderAll();
 }
 
@@ -432,6 +476,7 @@ function renderIngredientList() {
           <th>Embalagem</th>
           <th>Custo</th>
           <th>Custo por unidade base</th>
+          <th>Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -444,6 +489,7 @@ function renderIngredientList() {
                 <td>${formatNumber(ingredient.packageQuantity)} ${ingredient.unit}</td>
                 <td>${formatCurrency(ingredient.packageCost)}</td>
                 <td>${formatCurrency(unitCost)} / ${ingredient.unit}</td>
+                <td>${actionButtons("ingredient", ingredient.id)}</td>
               </tr>
             `;
           })
@@ -468,6 +514,7 @@ function renderRecipeList() {
           <th>Custo unitário</th>
           <th>Preço sugerido</th>
           <th>Itens</th>
+          <th>Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -478,7 +525,7 @@ function renderRecipeList() {
               <td>${recipe.yield}</td>
               <td>${formatCurrency(recipeUnitCost(recipe))}</td>
               <td>${formatCurrency(recipe.salePrice || 0)}</td>
-              <td>
+                <td>
                 <div class="mini-list">
                   ${recipe.items
                     .map((item) => {
@@ -486,9 +533,10 @@ function renderRecipeList() {
                       if (!ingredient) return "";
                       return `<span class="mini-pill">${ingredient.name}: ${formatNumber(item.quantity)} ${ingredient.unit}</span>`;
                     })
-                    .join("")}
+                  .join("")}
                 </div>
               </td>
+              <td>${actionButtons("recipe", recipe.id)}</td>
             </tr>
           `)
           .join("")}
@@ -512,6 +560,7 @@ function renderMovementList() {
           <th>Tipo</th>
           <th>Quantidade</th>
           <th>Valor</th>
+          <th>Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -525,6 +574,7 @@ function renderMovementList() {
                 <td>${movement.type === "entry" ? "Entrada" : "Saída manual"}</td>
                 <td>${formatNumber(movement.quantity)} ${ingredient?.unit || ""}</td>
                 <td>${movement.amount ? formatCurrency(movement.amount) : "-"}</td>
+                <td>${actionButtons("movement", movement.id)}</td>
               </tr>
             `;
           })
@@ -549,6 +599,7 @@ function renderSalesList() {
           <th>Qtd.</th>
           <th>Receita</th>
           <th>Custo estimado</th>
+          <th>Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -563,6 +614,7 @@ function renderSalesList() {
                 <td>${sale.quantity}</td>
                 <td>${formatCurrency(sale.amount)}</td>
                 <td>${formatCurrency(unitCost * sale.quantity)}</td>
+                <td>${actionButtons("sale", sale.id)}</td>
               </tr>
             `;
           })
@@ -650,20 +702,7 @@ function renderFinance() {
   document.getElementById("finance-expense").textContent = formatCurrency(expense);
   document.getElementById("finance-profit").textContent = formatCurrency(income - estimatedCost);
 
-  const rows = [
-    ...state.movements.map((movement) => ({
-      date: movement.date,
-      type: "Despesa",
-      description: `${getIngredientById(movement.ingredientId)?.name || "Insumo"} (${movement.type === "entry" ? "entrada" : "saída manual"})`,
-      amount: -(movement.amount || 0),
-    })),
-    ...state.sales.map((sale) => ({
-      date: sale.date,
-      type: "Receita",
-      description: state.recipes.find((item) => item.id === sale.recipeId)?.name || "Venda",
-      amount: sale.amount,
-    })),
-  ].sort((a, b) => (a.date < b.date ? 1 : -1));
+  const rows = buildFinanceRows();
 
   if (rows.length === 0) {
     els.financeList.innerHTML = emptyState("O fluxo financeiro vai aparecer aqui conforme você registrar compras e vendas.");
@@ -696,6 +735,23 @@ function renderFinance() {
   `;
 }
 
+function buildFinanceRows() {
+  return [
+    ...state.movements.map((movement) => ({
+      date: movement.date,
+      type: "Despesa",
+      description: `${getIngredientById(movement.ingredientId)?.name || "Insumo"} (${movement.type === "entry" ? "entrada" : "saída manual"})`,
+      amount: -(movement.amount || 0),
+    })),
+    ...state.sales.map((sale) => ({
+      date: sale.date,
+      type: "Receita",
+      description: state.recipes.find((item) => item.id === sale.recipeId)?.name || "Venda",
+      amount: sale.amount,
+    })),
+  ].sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
 function renderKpis() {
   const income = state.sales.reduce((sum, sale) => sum + sale.amount, 0);
   const expense = state.movements.reduce((sum, movement) => sum + (movement.amount || 0), 0);
@@ -715,6 +771,311 @@ function exportData() {
   URL.revokeObjectURL(url);
 }
 
+function exportExcel() {
+  const inventory = getInventorySnapshot();
+  const financeRows = buildFinanceRows();
+  const recipeRows = state.recipes.map((recipe) => ({
+    recipe,
+    unitCost: recipeUnitCost(recipe),
+  }));
+
+  const workbook = [
+    '<?xml version="1.0"?>',
+    '<?mso-application progid="Excel.Sheet"?>',
+    '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"',
+    ' xmlns:o="urn:schemas-microsoft-com:office:office"',
+    ' xmlns:x="urn:schemas-microsoft-com:office:excel"',
+    ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"',
+    ' xmlns:html="http://www.w3.org/TR/REC-html40">',
+    createWorksheetXml("Insumos", [
+      ["Insumo", "Unidade", "Embalagem", "Custo Embalagem", "Observacao"],
+      ...state.ingredients.map((ingredient) => [
+        ingredient.name,
+        ingredient.unit,
+        ingredient.packageQuantity,
+        ingredient.packageCost,
+        ingredient.notes || "",
+      ]),
+    ]),
+    createWorksheetXml("Sabores", [
+      ["Sabor", "Rendimento", "Preco Venda", "Custo Unitario", "Itens", "Observacao"],
+      ...recipeRows.map(({ recipe, unitCost }) => [
+        recipe.name,
+        recipe.yield,
+        recipe.salePrice || 0,
+        unitCost,
+        recipe.items
+          .map((item) => {
+            const ingredient = getIngredientById(item.ingredientId);
+            return ingredient ? `${ingredient.name}: ${formatNumber(item.quantity)} ${ingredient.unit}` : "";
+          })
+          .filter(Boolean)
+          .join(" | "),
+        recipe.notes || "",
+      ]),
+    ]),
+    createWorksheetXml("Estoque", [
+      ["Insumo", "Entradas", "Saidas Manuais", "Saidas por Venda", "Saldo Atual", "Unidade"],
+      ...inventory.map((row) => [
+        row.ingredient.name,
+        row.entries,
+        row.exitsManual,
+        row.exitsSales,
+        row.current,
+        row.ingredient.unit,
+      ]),
+    ]),
+    createWorksheetXml("Movimentos", [
+      ["Data", "Insumo", "Tipo", "Quantidade", "Valor", "Observacao"],
+      ...state.movements.map((movement) => {
+        const ingredient = getIngredientById(movement.ingredientId);
+        return [
+          formatDate(movement.date),
+          ingredient?.name || "-",
+          movement.type === "entry" ? "Entrada" : "Saída manual",
+          movement.quantity,
+          movement.amount || 0,
+          movement.notes || "",
+        ];
+      }),
+    ]),
+    createWorksheetXml("Vendas", [
+      ["Data", "Sabor", "Quantidade", "Receita", "Custo Estimado", "Observacao"],
+      ...state.sales.map((sale) => {
+        const recipe = state.recipes.find((item) => item.id === sale.recipeId);
+        const unitCost = recipe ? recipeUnitCost(recipe) : 0;
+        return [
+          formatDate(sale.date),
+          recipe?.name || "-",
+          sale.quantity,
+          sale.amount,
+          unitCost * sale.quantity,
+          sale.notes || "",
+        ];
+      }),
+    ]),
+    createWorksheetXml("Financeiro", [
+      ["Data", "Tipo", "Descricao", "Valor"],
+      ...financeRows.map((row) => [formatDate(row.date), row.type, row.description, row.amount]),
+    ]),
+    "</Workbook>",
+  ].join("");
+
+  const blob = new Blob([workbook], { type: "application/vnd.ms-excel;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "brownie-da-keise-export.xls";
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function createWorksheetXml(name, rows) {
+  const cells = rows
+    .map(
+      (row) => `
+        <Row>
+          ${row
+            .map((value) => {
+              const text = value ?? "";
+              const numericValue = typeof text === "number" ? text : Number(String(text).replace(",", "."));
+              const isNumeric = text !== "" && Number.isFinite(numericValue) && !/[A-Za-z]/.test(String(text));
+              const type = isNumeric ? "Number" : "String";
+              const output = isNumeric ? String(numericValue) : escapeXml(String(text));
+              return `<Cell><Data ss:Type="${type}">${output}</Data></Cell>`;
+            })
+            .join("")}
+        </Row>
+      `,
+    )
+    .join("");
+
+  return `<Worksheet ss:Name="${escapeXml(name)}"><Table>${cells}</Table></Worksheet>`;
+}
+
+function escapeXml(value) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function importExcelFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const xml = String(reader.result || "");
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(xml, "application/xml");
+      if (doc.querySelector("parsererror")) throw new Error("invalid_xml");
+      importWorkbookData(doc);
+      saveState();
+      renderAll();
+      alert("Dados importados do Excel com sucesso.");
+    } catch {
+      alert("Não consegui importar esse Excel. Use o arquivo exportado pelo próprio sistema.");
+    } finally {
+      event.target.value = "";
+    }
+  };
+  reader.readAsText(file);
+}
+
+function importWorkbookData(doc) {
+  const ingredientsRows = readWorksheetRows(doc, "Insumos");
+  const recipesRows = readWorksheetRows(doc, "Sabores");
+  const movementsRows = readWorksheetRows(doc, "Movimentos");
+  const salesRows = readWorksheetRows(doc, "Vendas");
+
+  const importedIngredients = ingredientsRows.slice(1).filter((row) => row.some(Boolean)).map((row) => ({
+    id: crypto.randomUUID(),
+    name: row[0] || "",
+    unit: row[1] || "g",
+    packageQuantity: Number(row[2] || 0),
+    packageCost: Number(row[3] || 0),
+    notes: row[4] || "",
+  }));
+
+  const ingredientByName = new Map();
+  importedIngredients.forEach((ingredient) => {
+    if (ingredient.name) ingredientByName.set(normalizeText(ingredient.name), ingredient);
+  });
+
+  const importedRecipes = recipesRows
+    .slice(1)
+    .filter((row) => row.some(Boolean))
+    .map((row) => {
+      const items = parseRecipeItems(row[4], ingredientByName);
+      return {
+        id: crypto.randomUUID(),
+        name: row[0] || "Sabor importado",
+        yield: Number(row[1] || 12),
+        salePrice: Number(row[2] || 0),
+        notes: row[5] || "",
+        items,
+      };
+    });
+
+  const recipeByName = new Map();
+  importedRecipes.forEach((recipe) => {
+    recipeByName.set(normalizeText(recipe.name), recipe);
+  });
+
+  const importedMovements = movementsRows
+    .slice(1)
+    .filter((row) => row.some(Boolean))
+    .map((row) => {
+      const ingredient = ingredientByName.get(normalizeText(row[1] || ""));
+      if (!ingredient) return null;
+      return {
+        id: crypto.randomUUID(),
+        date: parseImportedDate(row[0]),
+        ingredientId: ingredient.id,
+        type: normalizeText(row[2]) === "entrada" ? "entry" : "exit",
+        quantity: Number(row[3] || 0),
+        amount: Number(row[4] || 0),
+        notes: row[5] || "",
+      };
+    })
+    .filter(Boolean);
+
+  const importedSales = salesRows
+    .slice(1)
+    .filter((row) => row.some(Boolean))
+    .map((row) => {
+      const recipe = recipeByName.get(normalizeText(row[1] || ""));
+      if (!recipe) return null;
+      return {
+        id: crypto.randomUUID(),
+        date: parseImportedDate(row[0]),
+        recipeId: recipe.id,
+        quantity: Number(row[2] || 0),
+        amount: Number(row[3] || 0),
+        notes: row[5] || "",
+      };
+    })
+    .filter(Boolean);
+
+  if (
+    importedIngredients.length === 0
+    && importedRecipes.length === 0
+    && importedMovements.length === 0
+    && importedSales.length === 0
+  ) {
+    throw new Error("empty_import");
+  }
+
+  state.ingredients = importedIngredients;
+  state.recipes = importedRecipes;
+  state.movements = importedMovements;
+  state.sales = importedSales;
+}
+
+function readWorksheetRows(doc, worksheetName) {
+  const worksheets = Array.from(doc.getElementsByTagName("Worksheet"));
+  const worksheet = worksheets.find((node) => getWorksheetName(node) === worksheetName);
+  if (!worksheet) return [];
+
+  return Array.from(worksheet.getElementsByTagName("Row")).map((row) =>
+    Array.from(row.getElementsByTagName("Cell")).map((cell) => {
+      const data = cell.getElementsByTagName("Data")[0];
+      return data?.textContent?.trim() || "";
+    }),
+  );
+}
+
+function getWorksheetName(node) {
+  return (
+    node.getAttribute("ss:Name")
+    || node.getAttribute("Name")
+    || node.getAttributeNS("urn:schemas-microsoft-com:office:spreadsheet", "Name")
+    || ""
+  );
+}
+
+function parseRecipeItems(text, ingredientByName) {
+  if (!text) return [];
+  return text
+    .split(" | ")
+    .map((part) => {
+      const separator = part.indexOf(": ");
+      if (separator === -1) return null;
+      const name = part.slice(0, separator).trim();
+      const quantityText = part.slice(separator + 2).trim();
+      const match = quantityText.match(/^([\d.,]+)\s*(.*)$/);
+      if (!match) return null;
+      const ingredient = ingredientByName.get(normalizeText(name));
+      if (!ingredient) return null;
+      return {
+        ingredientId: ingredient.id,
+        quantity: Number(match[1].replace(",", ".")) || 0,
+      };
+    })
+    .filter((item) => item && item.quantity > 0);
+}
+
+function parseImportedDate(value) {
+  if (!value) return new Date().toISOString().slice(0, 10);
+  const brMatch = String(value).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (brMatch) return `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}`;
+  const isoMatch = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) return value;
+  return new Date().toISOString().slice(0, 10);
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
 function importData(event) {
   const file = event.target.files?.[0];
   if (!file) return;
@@ -730,6 +1091,8 @@ function importData(event) {
       renderAll();
     } catch {
       alert("Não consegui importar esse arquivo.");
+    } finally {
+      event.target.value = "";
     }
   };
   reader.readAsText(file);
@@ -745,6 +1108,122 @@ function resetData() {
   ensureSampleRecipes();
   saveState();
   renderAll();
+}
+
+function actionButtons(type, id) {
+  return `
+    <div class="row-actions">
+      <button type="button" class="table-action" data-action="edit" data-type="${type}" data-id="${id}">Editar</button>
+      <button type="button" class="table-action danger" data-action="delete" data-type="${type}" data-id="${id}">Excluir</button>
+    </div>
+  `;
+}
+
+function bindActionButtons() {
+  document.querySelectorAll(".table-action").forEach((button) => {
+    button.onclick = () => {
+      const { action, type, id } = button.dataset;
+      if (action === "edit") handleEdit(type, id);
+      if (action === "delete") handleDelete(type, id);
+    };
+  });
+}
+
+function handleEdit(type, id) {
+  if (type === "ingredient") {
+    const ingredient = state.ingredients.find((item) => item.id === id);
+    if (!ingredient) return;
+    editing.ingredientId = id;
+    const form = els.ingredientForm;
+    form.name.value = ingredient.name;
+    form.unit.value = ingredient.unit;
+    form.packageQuantity.value = ingredient.packageQuantity;
+    form.packageCost.value = ingredient.packageCost;
+    form.notes.value = ingredient.notes || "";
+    setFormButton(form, "Atualizar insumo");
+  }
+
+  if (type === "recipe") {
+    const recipe = state.recipes.find((item) => item.id === id);
+    if (!recipe) return;
+    editing.recipeId = id;
+    const form = els.recipeForm;
+    form.name.value = recipe.name;
+    form.yield.value = recipe.yield;
+    form.salePrice.value = recipe.salePrice || "";
+    form.notes.value = recipe.notes || "";
+    els.recipeItems.innerHTML = "";
+    recipe.items.forEach((item) => appendRecipeItem(item));
+    setFormButton(form, "Atualizar sabor");
+  }
+
+  if (type === "movement") {
+    const movement = state.movements.find((item) => item.id === id);
+    if (!movement) return;
+    editing.movementId = id;
+    const form = els.movementForm;
+    form.ingredientId.value = movement.ingredientId;
+    form.type.value = movement.type;
+    form.quantity.value = movement.quantity;
+    form.amount.value = movement.amount || "";
+    form.date.value = movement.date;
+    form.notes.value = movement.notes || "";
+    setFormButton(form, "Atualizar movimento");
+  }
+
+  if (type === "sale") {
+    const sale = state.sales.find((item) => item.id === id);
+    if (!sale) return;
+    editing.saleId = id;
+    const form = els.saleForm;
+    form.recipeId.value = sale.recipeId;
+    form.quantity.value = sale.quantity;
+    form.amount.value = sale.amount;
+    form.date.value = sale.date;
+    form.notes.value = sale.notes || "";
+    setFormButton(form, "Atualizar venda");
+  }
+}
+
+function handleDelete(type, id) {
+  if (type === "ingredient") {
+    const usedInRecipes = state.recipes.some((recipe) => recipe.items.some((item) => item.ingredientId === id));
+    const usedInMovements = state.movements.some((movement) => movement.ingredientId === id);
+    if (usedInRecipes || usedInMovements) {
+      alert("Esse insumo já está sendo usado em receitas ou movimentos. Edite primeiro essas referências antes de excluir.");
+      return;
+    }
+    state.ingredients = state.ingredients.filter((item) => item.id !== id);
+  }
+
+  if (type === "recipe") {
+    const usedInSales = state.sales.some((sale) => sale.recipeId === id);
+    if (usedInSales) {
+      alert("Esse sabor já possui vendas registradas. Exclua ou edite as vendas antes de remover o sabor.");
+      return;
+    }
+    state.recipes = state.recipes.filter((item) => item.id !== id);
+  }
+
+  if (type === "movement") {
+    state.movements = state.movements.filter((item) => item.id !== id);
+  }
+
+  if (type === "sale") {
+    state.sales = state.sales.filter((item) => item.id !== id);
+  }
+
+  saveState();
+  renderAll();
+}
+
+function setFormButton(form, text) {
+  const button = form.querySelector('button[type="submit"]');
+  if (button) button.textContent = text;
+}
+
+function resetFormButton(form, fallbackText) {
+  setFormButton(form, fallbackText);
 }
 
 function setToday(input, value = new Date().toISOString().slice(0, 10)) {
