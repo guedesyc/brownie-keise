@@ -176,16 +176,6 @@ h4 {
   gap: 24px;
 }
 
-.hero-accent {
-  width: 180px;
-  min-height: 130px;
-  border-radius: 24px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.2), transparent),
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.3), transparent 50%),
-    linear-gradient(135deg, var(--accent) 0%, var(--warm) 100%);
-}
-
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -422,7 +412,6 @@ th {
   width: 180px;
   height: 130px;
   object-fit: contain;
-  object-position: center;
-  border-radius: 24px;
   display: block;
+  background: transparent;
 }
