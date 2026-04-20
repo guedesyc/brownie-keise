@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Brownie da Keise</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div>
+          <p class="eyebrow">Gestão Local</p>
+          <h1>Brownie da Keise</h1>
+          <p class="sidebar-copy">
+            Controle simples de insumos, receitas, compras e vendas sem depender de fórmulas espalhadas.
+          </p>
+        </div>
+
+        <nav class="sidebar-nav">
+          <button class="nav-link active" data-section="dashboard">Dashboard</button>
+          <button class="nav-link" data-section="insumos">Insumos</button>
+          <button class="nav-link" data-section="receitas">Sabores</button>
+          <button class="nav-link" data-section="estoque">Estoque</button>
+          <button class="nav-link" data-section="vendas">Vendas</button>
+          <button class="nav-link" data-section="financeiro">Financeiro</button>
+        </nav>
+
+        <div class="sidebar-tools">
+          <button id="export-data" class="ghost-button">Exportar JSON</button>
+          <label class="ghost-button file-button">
+            Importar JSON
+            <input id="import-data" type="file" accept="application/json" hidden />
+          </label>
+          <button id="reset-data" class="ghost-button danger">Limpar Tudo</button>
+        </div>
+      </aside>
+
+      <main class="main">
+        <section id="dashboard" class="section active">
+          <div class="hero-card">
+            <div>
+              <p class="eyebrow">Resumo</p>
+              <h2>Painel rápido da operação</h2>
+              <p class="muted">
+                Tudo fica salvo localmente no navegador deste computador. Você pode cadastrar dados novos sem mexer em fórmulas.
+              </p>
+            </div>
+            <div class="hero-accent"></div>
+          </div>
+
+          <div class="kpi-grid">
+            <article class="kpi-card">
+              <span class="kpi-label">Insumos cadastrados</span>
+              <strong id="kpi-ingredients">0</strong>
+            </article>
+            <article class="kpi-card">
+              <span class="kpi-label">Sabores cadastrados</span>
+              <strong id="kpi-recipes">0</strong>
+            </article>
+            <article class="kpi-card">
+              <span class="kpi-label">Vendas registradas</span>
+              <strong id="kpi-sales">0</strong>
+            </article>
+            <article class="kpi-card">
+              <span class="kpi-label">Saldo financeiro</span>
+              <strong id="kpi-balance">R$ 0,00</strong>
+            </article>
+          </div>
+
+          <div class="panel-grid">
+            <article class="panel">
+              <div class="panel-head">
+                <h3>Estoque Atual</h3>
+                <span class="tag">físico</span>
+              </div>
+              <div id="inventory-summary" class="table-host"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <h3>Últimas Vendas</h3>
+                <span class="tag warm">receitas</span>
+              </div>
+              <div id="sales-summary" class="table-host"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="insumos" class="section">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Base</p>
+              <h2>Cadastro de Insumos</h2>
+            </div>
+          </div>
+
+          <div class="panel-grid single">
+            <article class="panel">
+              <div class="panel-head">
+                <h3>Novo insumo</h3>
+                <span class="tag">cadastro</span>
+              </div>
+              <form id="ingredient-form" class="form-grid">
+                <label>
+                  Nome
+                  <input name="name" required placeholder="Ex.: Açúcar" />
+                </label>
+                <label>
+                  Unidade base
+                  <select name="unit" required>
+                    <option value="g">gramas (g)</option>
+                    <option value="un">unidades</option>
+                    <option value="ml">ml</option>
+                  </select>
+                </label>
+                <label>
+                  Tamanho da embalagem
+                  <input name="packageQuantity" type="number" step="0.01" min="0" required placeholder="1000" />
+                </label>
+                <label>
+                  Custo da embalagem
+                  <input name="packageCost" type="number" step="0.01" min="0" required placeholder="10.00" />
+                </label>
+                <label class="full">
+                  Observação
+                  <input name="notes" placeholder="Opcional" />
+                </label>
+                <div class="full actions">
+                  <button type="submit" class="primary-button">Salvar insumo</button>
+                </div>
+              </form>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <h3>Lista de insumos</h3>
+                <span class="tag">base</span>
+              </div>
+              <div id="ingredient-list" class="table-host"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="receitas" class="section">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Produção</p>
+              <h2>Sabores e Receitas</h2>
+            </div>
+          </div>
+
+          <div class="panel-grid">
+            <article class="panel">
+              <div class="panel-head">
+                <h3>Novo sabor</h3>
+                <span class="tag warm">receita</span>
+              </div>
+              <form id="recipe-form" class="form-grid">
+                <label>
+                  Nome do sabor
+                  <input name="name" required placeholder="Ex.: Tradicional" />
+                </label>
+                <label>
+                  Rendimento da receita
+                  <input name="yield" type="number" min="1" step="1" required value="12" />
+                </label>
+                <label>
+                  Preço de venda unitário
+                  <input name="salePrice" type="number" min="0" step="0.01" placeholder="10.00" />
+                </label>
+                <label class="full">
+                  Observação
+                  <input name="notes" placeholder="Opcional" />
+                </label>
+
+                <div class="ingredient-builder full">
+                  <div class="builder-head">
+                    <h4>Itens da receita</h4>
+                    <button id="add-recipe-item" type="button" class="ghost-button">Adicionar item</button>
+                  </div>
+                  <div id="recipe-items" class="builder-list"></div>
+                </div>
+
+                <div class="full actions">
+                  <button type="submit" class="primary-button">Salvar sabor</button>
+                </div>
+              </form>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <h3>Sabores cadastrados</h3>
+                <span class="tag warm">custo</span>
+              </div>
+              <div id="recipe-list" class="table-host"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="estoque" class="section">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Movimentação</p>
+              <h2>Entradas e Saídas</h2>
+            </div>
+          </div>
+
+          <div class="panel-grid">
+            <article class="panel">
+              <div class="panel-head">
+                <h3>Novo movimento</h3>
+                <span class="tag">estoque</span>
+              </div>
+              <form id="movement-form" class="form-grid">
+                <label>
+                  Insumo
+                  <select name="ingredientId" required></select>
+                </label>
+                <label>
+                  Tipo
+                  <select name="type" required>
+                    <option value="entry">Entrada</option>
+                    <option value="exit">Saída manual</option>
+                  </select>
+                </label>
+                <label>
+                  Quantidade
+                  <input name="quantity" type="number" min="0" step="0.01" required />
+                </label>
+                <label>
+                  Valor total
+                  <input name="amount" type="number" min="0" step="0.01" placeholder="Opcional" />
+                </label>
+                <label>
+                  Data
+                  <input name="date" type="date" required />
+                </label>
+                <label class="full">
+                  Observação
+                  <input name="notes" placeholder="Opcional" />
+                </label>
+                <div class="full actions">
+                  <button type="submit" class="primary-button">Salvar movimento</button>
+                </div>
+              </form>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <h3>Histórico de estoque</h3>
+                <span class="tag">saldo</span>
+              </div>
+              <div id="movement-list" class="table-host"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="vendas" class="section">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Caixa</p>
+              <h2>Registro de Vendas</h2>
+            </div>
+          </div>
+
+          <div class="panel-grid">
+            <article class="panel">
+              <div class="panel-head">
+                <h3>Nova venda</h3>
+                <span class="tag warm">receita</span>
+              </div>
+              <form id="sale-form" class="form-grid">
+                <label>
+                  Sabor
+                  <select name="recipeId" required></select>
+                </label>
+                <label>
+                  Quantidade vendida
+                  <input name="quantity" type="number" min="1" step="1" required value="1" />
+                </label>
+                <label>
+                  Valor total recebido
+                  <input name="amount" type="number" min="0" step="0.01" placeholder="Deixe vazio para usar o preço padrão" />
+                </label>
+                <label>
+                  Data
+                  <input name="date" type="date" required />
+                </label>
+                <label class="full">
+                  Observação
+                  <input name="notes" placeholder="Opcional" />
+                </label>
+                <div class="full actions">
+                  <button type="submit" class="primary-button">Salvar venda</button>
+                </div>
+              </form>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <h3>Histórico de vendas</h3>
+                <span class="tag warm">automático</span>
+              </div>
+              <div id="sale-list" class="table-host"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="financeiro" class="section">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Resultado</p>
+              <h2>Fluxo Financeiro</h2>
+            </div>
+          </div>
+
+          <div class="kpi-grid">
+            <article class="kpi-card">
+              <span class="kpi-label">Receitas</span>
+              <strong id="finance-income">R$ 0,00</strong>
+            </article>
+            <article class="kpi-card">
+              <span class="kpi-label">Despesas</span>
+              <strong id="finance-expense">R$ 0,00</strong>
+            </article>
+            <article class="kpi-card">
+              <span class="kpi-label">Lucro bruto estimado</span>
+              <strong id="finance-profit">R$ 0,00</strong>
+            </article>
+          </div>
+
+          <div class="panel-grid single">
+            <article class="panel">
+              <div class="panel-head">
+                <h3>Lançamentos</h3>
+                <span class="tag">caixa</span>
+              </div>
+              <div id="finance-list" class="table-host"></div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <template id="recipe-item-template">
+      <div class="recipe-item-row">
+        <select class="recipe-item-ingredient" required></select>
+        <input class="recipe-item-quantity" type="number" min="0" step="0.01" placeholder="Qtd. por receita" required />
+        <button type="button" class="remove-item">Remover</button>
+      </div>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
