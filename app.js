@@ -5,6 +5,11 @@ const editing = {
   movementId: null,
   saleId: null,
 };
+const PAGE_SIZE = 25;
+const ui = {
+  monthFilter: "all",
+  pages: {},
+};
 
 const seedState = {
   ingredients: [
@@ -65,6 +70,7 @@ const els = {
   exportExcel: document.getElementById("export-excel"),
   importExcel: document.getElementById("import-excel"),
   importData: document.getElementById("import-data"),
+  monthFilter: document.getElementById("month-filter"),
   resetData: document.getElementById("reset-data"),
 };
 
@@ -117,7 +123,9 @@ function bindForms() {
   els.exportExcel.addEventListener("click", exportExcel);
   els.importExcel.addEventListener("change", importExcelFile);
   els.importData.addEventListener("change", importData);
+  els.monthFilter.addEventListener("change", handleMonthFilterChange);
   els.resetData.addEventListener("click", resetData);
+  document.addEventListener("click", handlePaginationClick);
 }
 
 function ensureSampleRecipes() {
@@ -240,6 +248,7 @@ function ensureSampleRecipes() {
 }
 
 function renderAll() {
+  fillMonthFilter();
   fillIngredientSelects();
   fillRecipeSelect();
   renderIngredientList();
@@ -252,6 +261,20 @@ function renderAll() {
   renderFinance();
   renderKpis();
   bindActionButtons();
+}
+
+function handleMonthFilterChange(event) {
+  ui.monthFilter = event.target.value || "all";
+  ui.pages = {};
+  renderAll();
+}
+
+function handlePaginationClick(event) {
+  const button = event.target.closest("[data-table-page]");
+  if (!button) return;
+
+  ui.pages[button.dataset.tablePage] = Number(button.dataset.page || 1);
+  renderAll();
 }
 
 function handleIngredientSubmit(event) {
@@ -418,6 +441,74 @@ function populateIngredientOptions(select, selectedId = "") {
   });
 }
 
+function fillMonthFilter() {
+  const months = getAvailableMonthKeys();
+  if (ui.monthFilter !== "all" && !months.includes(ui.monthFilter)) {
+    ui.monthFilter = "all";
+  }
+
+  els.monthFilter.innerHTML = [
+    '<option value="all">Todos os meses</option>',
+    ...months.map((monthKey) => `<option value="${monthKey}">${formatMonthLabel(monthKey)}</option>`),
+  ].join("");
+  els.monthFilter.value = ui.monthFilter;
+}
+
+function getAvailableMonthKeys() {
+  const months = new Set();
+  [...state.movements, ...state.sales].forEach((item) => {
+    const monthKey = getMonthKey(item.date);
+    if (monthKey) months.add(monthKey);
+  });
+  return Array.from(months).sort((a, b) => (a < b ? 1 : -1));
+}
+
+function getMonthKey(dateValue) {
+  return typeof dateValue === "string" && /^\d{4}-\d{2}/.test(dateValue) ? dateValue.slice(0, 7) : null;
+}
+
+function formatMonthLabel(monthKey) {
+  const [year, month] = monthKey.split("-").map(Number);
+  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
+}
+
+function getActiveMonthRange() {
+  if (ui.monthFilter === "all") return null;
+  const [year, month] = ui.monthFilter.split("-").map(Number);
+  const endDay = String(new Date(year, month, 0).getDate()).padStart(2, "0");
+  return {
+    start: `${ui.monthFilter}-01`,
+    end: `${ui.monthFilter}-${endDay}`,
+  };
+}
+
+function isInActiveMonth(dateValue) {
+  const range = getActiveMonthRange();
+  return !range || (dateValue >= range.start && dateValue <= range.end);
+}
+
+function isThroughActiveMonth(dateValue) {
+  const range = getActiveMonthRange();
+  return !range || dateValue <= range.end;
+}
+
+function compareByDateDesc(a, b) {
+  if ((a.date || "") === (b.date || "")) return 0;
+  return (a.date || "") < (b.date || "") ? 1 : -1;
+}
+
+function compareByName(a, b) {
+  return String(a.name || "").localeCompare(String(b.name || ""), "pt-BR");
+}
+
+function getVisibleMovements() {
+  return state.movements.filter((movement) => isInActiveMonth(movement.date)).sort(compareByDateDesc);
+}
+
+function getVisibleSales() {
+  return state.sales.filter((sale) => isInActiveMonth(sale.date)).sort(compareByDateDesc);
+}
+
 function getIngredientById(id) {
   return state.ingredients.find((item) => item.id === id);
 }
@@ -431,7 +522,7 @@ function recipeUnitCost(recipe) {
   return batchCost / Math.max(recipe.yield || 1, 1);
 }
 
-function getInventorySnapshot() {
+function getInventorySnapshot({ throughDate = null } = {}) {
   const totals = new Map();
 
   state.ingredients.forEach((ingredient) => {
@@ -439,6 +530,7 @@ function getInventorySnapshot() {
   });
 
   state.movements.forEach((movement) => {
+    if (throughDate && movement.date > throughDate) return;
     const item = totals.get(movement.ingredientId);
     if (!item) return;
     if (movement.type === "entry") item.entries += movement.quantity;
@@ -446,6 +538,7 @@ function getInventorySnapshot() {
   });
 
   state.sales.forEach((sale) => {
+    if (throughDate && sale.date > throughDate) return;
     const recipe = state.recipes.find((item) => item.id === sale.recipeId);
     if (!recipe) return;
     recipe.items.forEach((item) => {
@@ -462,13 +555,75 @@ function getInventorySnapshot() {
   }));
 }
 
-function renderIngredientList() {
-  if (state.ingredients.length === 0) {
-    els.ingredientList.innerHTML = emptyState("Nenhum insumo cadastrado ainda.");
+function renderPaginatedTable(host, tableId, rows, renderTable, emptyText) {
+  if (rows.length === 0) {
+    host.innerHTML = emptyState(emptyText);
     return;
   }
 
-  els.ingredientList.innerHTML = `
+  const totalPages = Math.max(Math.ceil(rows.length / PAGE_SIZE), 1);
+  const currentPage = Math.min(Math.max(ui.pages[tableId] || 1, 1), totalPages);
+  ui.pages[tableId] = currentPage;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageRows = rows.slice(start, start + PAGE_SIZE);
+
+  host.innerHTML = `
+    <div class="table-scroll">
+      ${renderTable(pageRows)}
+    </div>
+    ${renderPagination(tableId, currentPage, totalPages, rows.length)}
+  `;
+}
+
+function renderPagination(tableId, currentPage, totalPages, totalRows) {
+  if (totalPages <= 1) {
+    return `<div class="pagination-info">${totalRows} registro(s)</div>`;
+  }
+
+  const buttons = getPaginationItems(currentPage, totalPages).map((item) => {
+    if (item === "...") {
+      return '<span class="pagination-ellipsis">...</span>';
+    }
+
+    return `
+      <button
+        type="button"
+        class="pagination-button${item === currentPage ? " active" : ""}"
+        data-table-page="${tableId}"
+        data-page="${item}"
+      >
+        ${item}
+      </button>
+    `;
+  }).join("");
+
+  return `
+    <div class="pagination-bar">
+      <span>${totalRows} registro(s)</span>
+      <div class="pagination-pages">${buttons}</div>
+    </div>
+  `;
+}
+
+function getPaginationItems(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages = new Set([1, 2, totalPages - 1, totalPages, currentPage - 1, currentPage, currentPage + 1]);
+  const visiblePages = Array.from(pages)
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((a, b) => a - b);
+
+  return visiblePages.flatMap((page, index) => {
+    const previous = visiblePages[index - 1];
+    return previous && page - previous > 1 ? ["...", page] : [page];
+  });
+}
+
+function renderIngredientList() {
+  const ingredients = [...state.ingredients].sort(compareByName);
+  renderPaginatedTable(els.ingredientList, "ingredients", ingredients, (rows) => `
     <table>
       <thead>
         <tr>
@@ -480,7 +635,7 @@ function renderIngredientList() {
         </tr>
       </thead>
       <tbody>
-        ${state.ingredients
+        ${rows
           .map((ingredient) => {
             const unitCost = ingredient.packageCost / ingredient.packageQuantity;
             return `
@@ -496,16 +651,17 @@ function renderIngredientList() {
           .join("")}
       </tbody>
     </table>
-  `;
+  `, "Nenhum insumo cadastrado ainda.");
 }
 
 function renderRecipeList() {
+  const recipes = [...state.recipes].sort(compareByName);
   if (state.recipes.length === 0) {
     els.recipeList.innerHTML = emptyState("Cadastre um sabor para ver a composição aqui.");
     return;
   }
 
-  els.recipeList.innerHTML = `
+  renderPaginatedTable(els.recipeList, "recipes", recipes, (rows) => `
     <table>
       <thead>
         <tr>
@@ -518,7 +674,7 @@ function renderRecipeList() {
         </tr>
       </thead>
       <tbody>
-        ${state.recipes
+        ${rows
           .map((recipe) => `
             <tr>
               <td>${recipe.name}</td>
@@ -542,16 +698,17 @@ function renderRecipeList() {
           .join("")}
       </tbody>
     </table>
-  `;
+  `, "Cadastre um sabor para ver a composicao aqui.");
 }
 
 function renderMovementList() {
-  if (state.movements.length === 0) {
+  const movements = getVisibleMovements();
+  if (movements.length === 0) {
     els.movementList.innerHTML = emptyState("Sem movimentos de estoque até agora.");
     return;
   }
 
-  els.movementList.innerHTML = `
+  renderPaginatedTable(els.movementList, "movements", movements, (rows) => `
     <table>
       <thead>
         <tr>
@@ -564,7 +721,7 @@ function renderMovementList() {
         </tr>
       </thead>
       <tbody>
-        ${state.movements
+        ${rows
           .map((movement) => {
             const ingredient = getIngredientById(movement.ingredientId);
             return `
@@ -581,16 +738,17 @@ function renderMovementList() {
           .join("")}
       </tbody>
     </table>
-  `;
+  `, "Sem movimentos de estoque ate agora.");
 }
 
 function renderSalesList() {
-  if (state.sales.length === 0) {
+  const sales = getVisibleSales();
+  if (sales.length === 0) {
     els.saleList.innerHTML = emptyState("Sem vendas registradas ainda.");
     return;
   }
 
-  els.saleList.innerHTML = `
+  renderPaginatedTable(els.saleList, "sales", sales, (rows) => `
     <table>
       <thead>
         <tr>
@@ -603,7 +761,7 @@ function renderSalesList() {
         </tr>
       </thead>
       <tbody>
-        ${state.sales
+        ${rows
           .map((sale) => {
             const recipe = state.recipes.find((item) => item.id === sale.recipeId);
             const unitCost = recipe ? recipeUnitCost(recipe) : 0;
@@ -621,12 +779,14 @@ function renderSalesList() {
           .join("")}
       </tbody>
     </table>
-  `;
+  `, "Sem vendas registradas ainda.");
 }
 
 function renderInventorySummary() {
-  const snapshot = getInventorySnapshot();
-  els.inventorySummary.innerHTML = `
+  const range = getActiveMonthRange();
+  const snapshot = getInventorySnapshot({ throughDate: range?.end ?? null })
+    .sort((a, b) => compareByName(a.ingredient, b.ingredient));
+  renderPaginatedTable(els.inventorySummary, "inventory-summary", snapshot, (rows) => `
     <table>
       <thead>
         <tr>
@@ -638,7 +798,7 @@ function renderInventorySummary() {
         </tr>
       </thead>
       <tbody>
-        ${snapshot
+        ${rows
           .map((row) => `
             <tr>
               <td>${row.ingredient.name}</td>
@@ -651,17 +811,17 @@ function renderInventorySummary() {
           .join("")}
       </tbody>
     </table>
-  `;
+  `, "Nenhum insumo cadastrado ainda.");
 }
 
 function renderSalesSummary() {
-  const latest = state.sales.slice(0, 6);
-  if (latest.length === 0) {
+  const sales = getVisibleSales();
+  if (sales.length === 0) {
     els.salesSummary.innerHTML = emptyState("As vendas mais recentes vão aparecer aqui.");
     return;
   }
 
-  els.salesSummary.innerHTML = `
+  renderPaginatedTable(els.salesSummary, "sales-summary", sales, (rows) => `
     <table>
       <thead>
         <tr>
@@ -672,7 +832,7 @@ function renderSalesSummary() {
         </tr>
       </thead>
       <tbody>
-        ${latest
+        ${rows
           .map((sale) => {
             const recipe = state.recipes.find((item) => item.id === sale.recipeId);
             return `
@@ -687,13 +847,15 @@ function renderSalesSummary() {
           .join("")}
       </tbody>
     </table>
-  `;
+  `, "As vendas mais recentes vao aparecer aqui.");
 }
 
 function renderFinance() {
-  const expense = state.movements.reduce((sum, movement) => sum + (movement.amount || 0), 0);
-  const income = state.sales.reduce((sum, sale) => sum + sale.amount, 0);
-  const estimatedCost = state.sales.reduce((sum, sale) => {
+  const movements = getVisibleMovements();
+  const sales = getVisibleSales();
+  const expense = movements.reduce((sum, movement) => sum + (movement.amount || 0), 0);
+  const income = sales.reduce((sum, sale) => sum + sale.amount, 0);
+  const estimatedCost = sales.reduce((sum, sale) => {
     const recipe = state.recipes.find((item) => item.id === sale.recipeId);
     return sum + (recipe ? recipeUnitCost(recipe) * sale.quantity : 0);
   }, 0);
@@ -702,14 +864,14 @@ function renderFinance() {
   document.getElementById("finance-expense").textContent = formatCurrency(expense);
   document.getElementById("finance-profit").textContent = formatCurrency(income - estimatedCost);
 
-  const rows = buildFinanceRows();
+  const rows = buildFinanceRows({ movements, sales });
 
   if (rows.length === 0) {
     els.financeList.innerHTML = emptyState("O fluxo financeiro vai aparecer aqui conforme você registrar compras e vendas.");
     return;
   }
 
-  els.financeList.innerHTML = `
+  renderPaginatedTable(els.financeList, "finance", rows, (pageRows) => `
     <table>
       <thead>
         <tr>
@@ -720,7 +882,7 @@ function renderFinance() {
         </tr>
       </thead>
       <tbody>
-        ${rows
+        ${pageRows
           .map((row) => `
             <tr>
               <td>${formatDate(row.date)}</td>
@@ -732,18 +894,18 @@ function renderFinance() {
           .join("")}
       </tbody>
     </table>
-  `;
+  `, "O fluxo financeiro vai aparecer aqui conforme voce registrar compras e vendas.");
 }
 
-function buildFinanceRows() {
+function buildFinanceRows({ movements = state.movements, sales = state.sales } = {}) {
   return [
-    ...state.movements.map((movement) => ({
+    ...movements.map((movement) => ({
       date: movement.date,
       type: "Despesa",
       description: `${getIngredientById(movement.ingredientId)?.name || "Insumo"} (${movement.type === "entry" ? "entrada" : "saída manual"})`,
       amount: -(movement.amount || 0),
     })),
-    ...state.sales.map((sale) => ({
+    ...sales.map((sale) => ({
       date: sale.date,
       type: "Receita",
       description: state.recipes.find((item) => item.id === sale.recipeId)?.name || "Venda",
@@ -753,11 +915,13 @@ function buildFinanceRows() {
 }
 
 function renderKpis() {
-  const income = state.sales.reduce((sum, sale) => sum + sale.amount, 0);
-  const expense = state.movements.reduce((sum, movement) => sum + (movement.amount || 0), 0);
+  const visibleSales = getVisibleSales();
+  const visibleMovements = getVisibleMovements();
+  const income = visibleSales.reduce((sum, sale) => sum + sale.amount, 0);
+  const expense = visibleMovements.reduce((sum, movement) => sum + (movement.amount || 0), 0);
   document.getElementById("kpi-ingredients").textContent = String(state.ingredients.length);
   document.getElementById("kpi-recipes").textContent = String(state.recipes.length);
-  document.getElementById("kpi-sales").textContent = String(state.sales.length);
+  document.getElementById("kpi-sales").textContent = String(visibleSales.length);
   document.getElementById("kpi-balance").textContent = formatCurrency(income - expense);
 }
 
