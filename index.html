@@ -13,7 +13,53 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="shell">
+    <section id="admin-login" class="login-screen" hidden>
+      <div class="login-brand-panel">
+        <div class="login-brand">
+          <img src="./assets/logo-mark-light.png" alt="Logo Brownie da Keise" />
+          <div>
+            <strong>Brownie da Keise</strong>
+            <span>Gestão de vendas e produção</span>
+          </div>
+        </div>
+
+        <div class="login-copy">
+          <img src="./assets/logo-full-light.png" alt="Brownie da Keise" class="login-full-logo" />
+          <p class="eyebrow">Administração com sabor</p>
+          <h1>Organize pedidos, estoque e receitas em um só painel.</h1>
+          <p>Controle os dados da operação com segurança e acompanhe o crescimento da Brownie da Keise.</p>
+        </div>
+
+        <div class="login-metric">
+          <strong>100%</strong>
+          <span>dos dados salvos no banco da hospedagem</span>
+        </div>
+      </div>
+
+      <div class="login-form-panel">
+        <div class="login-card">
+          <button id="back-to-sales" class="login-back" type="button">← Voltar para vendas</button>
+          <p class="eyebrow">Área administrativa</p>
+          <h2>Bem-vindo de volta</h2>
+          <p class="muted">Entre para acessar estoque, receitas, vendas e financeiro.</p>
+
+          <form id="admin-login-form" class="login-form">
+            <label>
+              Usuário
+              <input id="admin-username" name="username" autocomplete="username" required />
+            </label>
+            <label>
+              Senha
+              <input id="admin-password" name="password" type="password" autocomplete="current-password" required />
+            </label>
+            <p id="admin-login-error" class="login-error" role="alert" hidden>Usuário ou senha inválidos.</p>
+            <button id="admin-login-submit" class="primary-button" type="submit">Entrar no painel →</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <div id="admin-shell" class="shell" hidden>
       <aside class="sidebar">
         <div>
           <p class="eyebrow">Feito por Yago Guedes</p>
@@ -65,7 +111,7 @@
               </p>
             </div>
             <div class="hero-accent">
-             <img src=./logo.jpeg alt="Logo Brownie da Keise" class="hero-logo"/>
+             <img src="./assets/logo-mark-brown.png" alt="Logo Brownie da Keise" class="hero-logo"/>
             </div>
           </div>
 

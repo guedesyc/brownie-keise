@@ -29,6 +29,177 @@ body {
   min-height: 100vh;
 }
 
+[hidden] {
+  display: none !important;
+}
+
+.login-screen {
+  display: grid;
+  grid-template-columns: minmax(420px, 0.92fr) minmax(420px, 1.08fr);
+  min-height: 100vh;
+  background: #fffaf5;
+}
+
+.login-brand-panel {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 56px 64px;
+  color: #fffaf1;
+  background:
+    radial-gradient(circle at 88% 72%, rgba(244, 182, 138, 0.18) 0 10%, transparent 11% 100%),
+    radial-gradient(circle at 88% 72%, transparent 0 21%, rgba(244, 182, 138, 0.10) 22% 31%, transparent 32% 100%),
+    linear-gradient(145deg, #3a170d 0%, #6f2b11 58%, #a54d17 100%);
+}
+
+.login-brand-panel::after {
+  content: "";
+  position: absolute;
+  right: -120px;
+  bottom: -120px;
+  width: 360px;
+  height: 360px;
+  border: 60px solid rgba(255, 250, 241, 0.08);
+  border-radius: 50%;
+}
+
+.login-brand,
+.login-copy,
+.login-metric {
+  position: relative;
+  z-index: 1;
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.login-brand img {
+  width: 62px;
+  height: 62px;
+  object-fit: contain;
+  box-shadow: 0 16px 36px rgba(47, 36, 28, 0.24);
+}
+
+.login-brand strong,
+.login-brand span {
+  display: block;
+}
+
+.login-brand strong {
+  font-size: 20px;
+}
+
+.login-brand span {
+  margin-top: 4px;
+  color: rgba(255, 250, 241, 0.74);
+  font-size: 13px;
+}
+
+.login-copy {
+  max-width: 620px;
+}
+
+.login-full-logo {
+  display: block;
+  width: min(420px, 92%);
+  height: auto;
+  margin: 0 0 34px;
+}
+
+.login-copy .eyebrow {
+  color: #f4b68a;
+}
+
+.login-copy h1 {
+  max-width: 620px;
+  font-family: "Inter", sans-serif;
+  font-size: 56px;
+  line-height: 1.06;
+  font-weight: 700;
+}
+
+.login-copy p:last-child {
+  max-width: 520px;
+  margin: 16px 0 0;
+  color: rgba(255, 250, 241, 0.78);
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+.login-metric {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 330px;
+}
+
+.login-metric strong {
+  color: #ffd16c;
+  font-size: 38px;
+}
+
+.login-metric span {
+  color: rgba(255, 250, 241, 0.78);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.login-form-panel {
+  display: grid;
+  place-items: center;
+  padding: 40px;
+  background:
+    radial-gradient(circle at 78% 18%, rgba(244, 182, 138, 0.20), transparent 24%),
+    linear-gradient(180deg, #fffaf5 0%, #f8efe7 100%);
+}
+
+.login-card {
+  width: min(100%, 460px);
+}
+
+.login-back {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  padding: 0;
+  margin-bottom: 56px;
+}
+
+.login-card h2 {
+  margin-bottom: 14px;
+  font-family: "Inter", sans-serif;
+  font-size: 36px;
+  font-weight: 600;
+}
+
+.login-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 34px;
+}
+
+.login-form .primary-button {
+  width: 100%;
+  min-height: 54px;
+  margin-top: 12px;
+  box-shadow: 0 18px 34px rgba(165, 77, 23, 0.24);
+}
+
+.login-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .shell {
   display: grid;
   grid-template-columns: 300px 1fr;
@@ -464,6 +635,19 @@ th {
 }
 
 @media (max-width: 1100px) {
+  .login-screen {
+    grid-template-columns: 1fr;
+  }
+
+  .login-brand-panel {
+    min-height: 420px;
+    padding: 36px;
+  }
+
+  .login-copy h1 {
+    font-size: 44px;
+  }
+
   .shell {
     grid-template-columns: 1fr;
   }
@@ -480,6 +664,28 @@ th {
 }
 
 @media (max-width: 720px) {
+  .login-brand-panel {
+    min-height: auto;
+    gap: 72px;
+    padding: 28px 22px;
+  }
+
+  .login-copy h1 {
+    font-size: 36px;
+  }
+
+  .login-form-panel {
+    padding: 34px 22px;
+  }
+
+  .login-back {
+    margin-bottom: 34px;
+  }
+
+  .login-card h2 {
+    font-size: 30px;
+  }
+
   .main {
     padding: 18px;
   }
@@ -497,8 +703,8 @@ th {
   }
 }
 .hero-logo {
-  width: 180px;
-  height: 130px;
+  width: 170px;
+  height: 170px;
   object-fit: contain;
   display: block;
   background: transparent;

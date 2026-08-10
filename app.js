@@ -1,4 +1,8 @@
 const STORAGE_KEY = "brownie-da-keise-app-v2";
+const API_URLS = {
+  login: "./api/login.php",
+  state: "./api/state.php",
+};
 const editing = {
   ingredientId: null,
   recipeId: null,
@@ -9,6 +13,14 @@ const PAGE_SIZE = 25;
 const ui = {
   monthFilter: "all",
   pages: {},
+};
+const serverSync = {
+  enabled: false,
+  authenticated: false,
+  needsLogin: false,
+  saving: false,
+  pending: false,
+  lastError: null,
 };
 
 const seedState = {
@@ -47,9 +59,15 @@ const seedState = {
   sales: [],
 };
 
-const state = loadState();
+let state = loadState();
 
 const els = {
+  adminLogin: document.getElementById("admin-login"),
+  adminLoginForm: document.getElementById("admin-login-form"),
+  adminLoginError: document.getElementById("admin-login-error"),
+  adminLoginSubmit: document.getElementById("admin-login-submit"),
+  adminShell: document.getElementById("admin-shell"),
+  backToSales: document.getElementById("back-to-sales"),
   sections: document.querySelectorAll(".section"),
   navLinks: document.querySelectorAll(".nav-link"),
   ingredientForm: document.getElementById("ingredient-form"),
@@ -76,24 +94,25 @@ const els = {
 
 init();
 
-function init() {
+async function init() {
   bindNavigation();
   bindForms();
+  const ready = await initializeServerState();
+  if (!ready) {
+    showLoginScreen();
+    return;
+  }
   ensureSampleRecipes();
+  saveState();
   renderAll();
+  showAdminShell();
 }
 
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return structuredClone(seedState);
-    const parsed = JSON.parse(raw);
-    return {
-      ingredients: parsed.ingredients || [],
-      recipes: parsed.recipes || [],
-      movements: parsed.movements || [],
-      sales: parsed.sales || [],
-    };
+    return normalizeState(JSON.parse(raw));
   } catch {
     return structuredClone(seedState);
   }
@@ -101,6 +120,138 @@ function loadState() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (serverSync.enabled && serverSync.authenticated) {
+    saveServerState();
+  }
+}
+
+function normalizeState(nextState) {
+  return {
+    ingredients: Array.isArray(nextState?.ingredients) ? nextState.ingredients : [],
+    recipes: Array.isArray(nextState?.recipes) ? nextState.recipes : [],
+    movements: Array.isArray(nextState?.movements) ? nextState.movements : [],
+    sales: Array.isArray(nextState?.sales) ? nextState.sales : [],
+  };
+}
+
+async function initializeServerState() {
+  try {
+    let response = await fetch(API_URLS.state, { credentials: "same-origin" });
+    if (response.status === 401) {
+      serverSync.needsLogin = true;
+      return false;
+    }
+
+    if (!response.ok) throw new Error("state_load_failed");
+    const payload = await response.json();
+    serverSync.enabled = true;
+    serverSync.authenticated = true;
+    serverSync.needsLogin = false;
+    serverSync.lastError = null;
+
+    if (payload.data) {
+      state = normalizeState(payload.data);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+    return true;
+  } catch {
+    serverSync.enabled = false;
+    serverSync.authenticated = false;
+    serverSync.needsLogin = true;
+    serverSync.lastError = "server_unavailable";
+    return false;
+  }
+}
+
+async function handleAdminLogin(event) {
+  event.preventDefault();
+  hideLoginError();
+  setLoginLoading(true);
+
+  const data = new FormData(event.currentTarget);
+  const username = String(data.get("username") || "").trim();
+  const password = String(data.get("password") || "");
+
+  try {
+    const response = await fetch(API_URLS.login, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!response.ok) {
+      showLoginError();
+      return;
+    }
+
+    serverSync.authenticated = true;
+    const ready = await initializeServerState();
+    if (!ready) {
+      showLoginError("Não consegui carregar o painel. Tente novamente.");
+      return;
+    }
+
+    ensureSampleRecipes();
+    saveState();
+    renderAll();
+    showAdminShell();
+  } catch {
+    showLoginError("Não consegui conectar ao servidor.");
+  } finally {
+    setLoginLoading(false);
+  }
+}
+
+function showLoginScreen() {
+  els.adminLogin.hidden = false;
+  els.adminShell.hidden = true;
+  document.getElementById("admin-username")?.focus();
+}
+
+function showAdminShell() {
+  els.adminLogin.hidden = true;
+  els.adminShell.hidden = false;
+}
+
+function showLoginError(message = "Usuário ou senha inválidos.") {
+  els.adminLoginError.textContent = message;
+  els.adminLoginError.hidden = false;
+}
+
+function hideLoginError() {
+  els.adminLoginError.hidden = true;
+}
+
+function setLoginLoading(isLoading) {
+  els.adminLoginSubmit.disabled = isLoading;
+  els.adminLoginSubmit.textContent = isLoading ? "Entrando..." : "Entrar no painel →";
+}
+
+async function saveServerState() {
+  if (serverSync.saving) {
+    serverSync.pending = true;
+    return;
+  }
+  serverSync.saving = true;
+
+  try {
+    const response = await fetch(API_URLS.state, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: state }),
+    });
+    if (!response.ok) throw new Error("state_save_failed");
+    serverSync.lastError = null;
+  } catch {
+    serverSync.lastError = "server_save_failed";
+  } finally {
+    serverSync.saving = false;
+    if (serverSync.pending) {
+      serverSync.pending = false;
+      saveServerState();
+    }
+  }
 }
 
 function bindNavigation() {
@@ -114,6 +265,10 @@ function bindNavigation() {
 }
 
 function bindForms() {
+  els.adminLoginForm.addEventListener("submit", handleAdminLogin);
+  els.backToSales.addEventListener("click", () => {
+    window.location.hash = "";
+  });
   els.ingredientForm.addEventListener("submit", handleIngredientSubmit);
   els.recipeForm.addEventListener("submit", handleRecipeSubmit);
   els.movementForm.addEventListener("submit", handleMovementSubmit);
