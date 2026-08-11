@@ -449,11 +449,14 @@ async function saveServerState() {
 function bindNavigation() {
   els.navLinks.forEach((button) => {
     button.addEventListener("click", () => {
-      const target = button.dataset.section;
-      els.navLinks.forEach((link) => link.classList.toggle("active", link === button));
-      els.sections.forEach((section) => section.classList.toggle("active", section.id === target));
+      activateSection(button.dataset.section);
     });
   });
+}
+
+function activateSection(target) {
+  els.navLinks.forEach((link) => link.classList.toggle("active", link.dataset.section === target));
+  els.sections.forEach((section) => section.classList.toggle("active", section.id === target));
 }
 
 function bindForms() {
@@ -1228,13 +1231,14 @@ function fillSuggestedSale(orderId, itemIndex) {
   activeSuggestedOrderId = orderId;
   editing.saleId = null;
   const form = els.saleForm;
+  activateSection("vendas");
   form.recipeId.value = recipe.id;
   form.quantity.value = Number(orderItem.quantity || 1);
   form.amount.value = Number(orderItem.quantity || 1) * Number(orderItem.price || recipe.salePrice || 0);
   form.date.value = new Date().toISOString().slice(0, 10);
   form.notes.value = `Pedido sugerido pelo site em ${formatDateTime(order.createdAt)}.`;
   setFormButton(form, "Salvar venda sugerida");
-  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  window.setTimeout(() => form.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
 }
 
 function findRecipeForSuggestedItem(orderItem) {
