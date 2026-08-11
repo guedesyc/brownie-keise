@@ -1146,3 +1146,10 @@ th {
   display: block;
   background: transparent;
 }
+
+[hidden],
+.sales-page[hidden],
+.login-screen[hidden],
+.shell[hidden] {
+  display: none !important;
+}
