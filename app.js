@@ -2,7 +2,51 @@ const STORAGE_KEY = "brownie-da-keise-app-v2";
 const API_URLS = {
   login: "./api/login.php",
   state: "./api/state.php",
+  orders: "./api/orders.php",
 };
+const WHATSAPP_NUMBER = "71992713498";
+const SALE_PRODUCTS = [
+  {
+    id: "tradicional",
+    name: "Tradicional",
+    price: 10,
+    image: "./assets/produtos/tradicional.png",
+    description: "Chocolate intenso, casquinha brilhante e interior bem úmido.",
+    tag: "Clássico",
+  },
+  {
+    id: "brookies",
+    name: "Brookies",
+    price: 12,
+    image: "./assets/produtos/brookies.png",
+    description: "Brownie denso com cobertura dourada e toque caramelizado.",
+    tag: "Crocante",
+  },
+  {
+    id: "doce-leite-coco",
+    name: "Doce de Leite com Coco",
+    price: 12,
+    image: "./assets/produtos/doce-de-leite-coco.png",
+    description: "Doce de leite cremoso, coco tostado e massa chocolatuda.",
+    tag: "Cremoso",
+  },
+  {
+    id: "mix-castanhas",
+    name: "Mix de Castanhas",
+    price: 10,
+    image: "./assets/produtos/mix-castanhas.png",
+    description: "Castanhas selecionadas, textura marcante e chocolate profundo.",
+    tag: "Especial",
+  },
+  {
+    id: "charge",
+    name: "Charge",
+    price: 12,
+    image: "./assets/produtos/charge.png",
+    description: "Camadas generosas com chocolate, caramelo e amendoim.",
+    tag: "Recheado",
+  },
+];
 const editing = {
   ingredientId: null,
   recipeId: null,
@@ -22,6 +66,9 @@ const serverSync = {
   pending: false,
   lastError: null,
 };
+const saleCart = new Map();
+let suggestedOrders = [];
+let activeSuggestedOrderId = null;
 
 const seedState = {
   ingredients: [
@@ -62,6 +109,12 @@ const seedState = {
 let state = loadState();
 
 const els = {
+  salesPage: document.getElementById("sales-page"),
+  productGrid: document.getElementById("product-grid"),
+  orderSummary: document.getElementById("order-summary"),
+  orderTotal: document.getElementById("order-total"),
+  buyBrownie: document.getElementById("buy-brownie"),
+  openAdminLogin: document.getElementById("open-admin-login"),
   adminLogin: document.getElementById("admin-login"),
   adminLoginForm: document.getElementById("admin-login-form"),
   adminLoginError: document.getElementById("admin-login-error"),
@@ -79,6 +132,7 @@ const els = {
   movementList: document.getElementById("movement-list"),
   saleForm: document.getElementById("sale-form"),
   saleList: document.getElementById("sale-list"),
+  suggestedOrderList: document.getElementById("suggested-order-list"),
   financeList: document.getElementById("finance-list"),
   inventorySummary: document.getElementById("inventory-summary"),
   salesSummary: document.getElementById("sales-summary"),
@@ -97,15 +151,9 @@ init();
 async function init() {
   bindNavigation();
   bindForms();
-  const ready = await initializeServerState();
-  if (!ready) {
-    showLoginScreen();
-    return;
-  }
-  ensureSampleRecipes();
-  saveState();
-  renderAll();
-  showAdminShell();
+  renderSaleProducts();
+  updateOrderSummary();
+  showSalesPage();
 }
 
 function loadState() {
@@ -121,7 +169,138 @@ function loadState() {
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   if (serverSync.enabled && serverSync.authenticated) {
-    saveServerState();
+    return saveServerState();
+  }
+  return Promise.resolve(true);
+}
+
+function renderSaleProducts() {
+  els.productGrid.innerHTML = SALE_PRODUCTS.map((product) => `
+    <article class="product-card">
+      <div class="product-media">
+        <img src="${product.image}" alt="Brownie ${product.name}" />
+        <span>${product.tag}</span>
+      </div>
+      <div class="product-body">
+        <div>
+          <h3>${product.name}</h3>
+          <p>${product.description}</p>
+        </div>
+        <div class="product-footer">
+          <strong>${formatCurrency(product.price)}</strong>
+          <div class="quantity-control" aria-label="Quantidade de ${product.name}">
+            <button type="button" data-cart-action="decrease" data-product-id="${product.id}">−</button>
+            <span id="qty-${product.id}">0</span>
+            <button type="button" data-cart-action="increase" data-product-id="${product.id}">+</button>
+          </div>
+        </div>
+      </div>
+    </article>
+  `).join("");
+}
+
+function handleProductClick(event) {
+  const button = event.target.closest("[data-cart-action]");
+  if (!button) return;
+
+  const productId = button.dataset.productId;
+  const current = saleCart.get(productId) || 0;
+  const next = button.dataset.cartAction === "increase" ? current + 1 : Math.max(current - 1, 0);
+
+  if (next === 0) {
+    saleCart.delete(productId);
+  } else {
+    saleCart.set(productId, next);
+  }
+
+  updateOrderSummary();
+}
+
+function updateOrderSummary() {
+  let itemCount = 0;
+  let total = 0;
+
+  SALE_PRODUCTS.forEach((product) => {
+    const quantity = saleCart.get(product.id) || 0;
+    itemCount += quantity;
+    total += quantity * product.price;
+    const quantityEl = document.getElementById(`qty-${product.id}`);
+    if (quantityEl) quantityEl.textContent = String(quantity);
+  });
+
+  els.orderSummary.textContent = itemCount === 0
+    ? "Nenhum brownie selecionado"
+    : `${itemCount} ${itemCount === 1 ? "brownie selecionado" : "brownies selecionados"}`;
+  els.orderTotal.textContent = formatCurrency(total);
+}
+
+async function handleBuyBrownie() {
+  const selected = SALE_PRODUCTS
+    .map((product) => ({ ...product, quantity: saleCart.get(product.id) || 0 }))
+    .filter((product) => product.quantity > 0);
+
+  if (selected.length === 0) {
+    alert("Escolha pelo menos um brownie para montar seu pedido.");
+    return;
+  }
+
+  const lines = selected.map((product) =>
+    `- ${product.quantity}x ${product.name} (${formatCurrency(product.price)} cada)`,
+  );
+  const total = selected.reduce((sum, product) => sum + product.quantity * product.price, 0);
+  const orderItems = selected.map((product) => ({
+    productId: product.id,
+    name: product.name,
+    quantity: product.quantity,
+    price: product.price,
+  }));
+  const message = [
+    "Olá, Keise! Quero fazer um pedido:",
+    "",
+    ...lines,
+    "",
+    `Total: ${formatCurrency(total)}`,
+  ].join("\n");
+
+  await Promise.all(orderItems.map((item) => createSuggestedOrder([item])));
+  window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
+}
+
+async function createSuggestedOrder(items) {
+  try {
+    await fetch(API_URLS.orders, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    });
+  } catch {
+    // WhatsApp remains the primary customer-facing action if the suggestion API is unavailable.
+  }
+}
+
+async function openAdminArea() {
+  const ready = await initializeServerState();
+  if (!ready) {
+    showLoginScreen();
+    return;
+  }
+
+  ensureSampleRecipes();
+  await loadSuggestedOrders();
+  saveState();
+  renderAll();
+  showAdminShell();
+}
+
+async function loadSuggestedOrders() {
+  try {
+    const response = await fetch(API_URLS.orders, { credentials: "same-origin" });
+    if (!response.ok) throw new Error("orders_load_failed");
+    const payload = await response.json();
+    suggestedOrders = Array.isArray(payload.orders) ? payload.orders : [];
+  } catch {
+    suggestedOrders = [];
   }
 }
 
@@ -192,6 +371,7 @@ async function handleAdminLogin(event) {
     }
 
     ensureSampleRecipes();
+    await loadSuggestedOrders();
     saveState();
     renderAll();
     showAdminShell();
@@ -203,14 +383,22 @@ async function handleAdminLogin(event) {
 }
 
 function showLoginScreen() {
+  els.salesPage.hidden = true;
   els.adminLogin.hidden = false;
   els.adminShell.hidden = true;
   document.getElementById("admin-username")?.focus();
 }
 
 function showAdminShell() {
+  els.salesPage.hidden = true;
   els.adminLogin.hidden = true;
   els.adminShell.hidden = false;
+}
+
+function showSalesPage() {
+  els.salesPage.hidden = false;
+  els.adminLogin.hidden = true;
+  els.adminShell.hidden = true;
 }
 
 function showLoginError(message = "Usuário ou senha inválidos.") {
@@ -230,10 +418,11 @@ function setLoginLoading(isLoading) {
 async function saveServerState() {
   if (serverSync.saving) {
     serverSync.pending = true;
-    return;
+    return false;
   }
   serverSync.saving = true;
 
+  let saved = false;
   try {
     const response = await fetch(API_URLS.state, {
       method: "POST",
@@ -243,6 +432,7 @@ async function saveServerState() {
     });
     if (!response.ok) throw new Error("state_save_failed");
     serverSync.lastError = null;
+    saved = true;
   } catch {
     serverSync.lastError = "server_save_failed";
   } finally {
@@ -252,6 +442,7 @@ async function saveServerState() {
       saveServerState();
     }
   }
+  return saved;
 }
 
 function bindNavigation() {
@@ -265,9 +456,12 @@ function bindNavigation() {
 }
 
 function bindForms() {
+  els.productGrid.addEventListener("click", handleProductClick);
+  els.buyBrownie.addEventListener("click", handleBuyBrownie);
+  els.openAdminLogin.addEventListener("click", openAdminArea);
   els.adminLoginForm.addEventListener("submit", handleAdminLogin);
   els.backToSales.addEventListener("click", () => {
-    window.location.hash = "";
+    showSalesPage();
   });
   els.ingredientForm.addEventListener("submit", handleIngredientSubmit);
   els.recipeForm.addEventListener("submit", handleRecipeSubmit);
@@ -411,6 +605,7 @@ function renderAll() {
   renderRecipeList();
   renderMovementList();
   renderSalesList();
+  renderSuggestedOrders();
   renderInventorySummary();
   renderSalesSummary();
   renderFinance();
@@ -517,7 +712,7 @@ function handleMovementSubmit(event) {
   renderAll();
 }
 
-function handleSaleSubmit(event) {
+async function handleSaleSubmit(event) {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
   const recipe = state.recipes.find((item) => item.id === data.get("recipeId"));
@@ -525,6 +720,7 @@ function handleSaleSubmit(event) {
 
   const quantity = Number(data.get("quantity"));
   const amount = Number(data.get("amount") || recipe.salePrice * quantity);
+  const wasEditingSale = Boolean(editing.saleId);
 
   const sale = {
     id: editing.saleId || crypto.randomUUID(),
@@ -541,7 +737,20 @@ function handleSaleSubmit(event) {
   } else {
     state.sales.unshift(sale);
   }
-  saveState();
+  const saleSaved = await saveState();
+
+  if (activeSuggestedOrderId && !wasEditingSale && saleSaved !== false) {
+    const updated = await updateSuggestedOrderStatus(activeSuggestedOrderId, "converted");
+    if (updated) {
+      suggestedOrders = suggestedOrders.filter((order) => order.id !== activeSuggestedOrderId);
+    } else {
+      alert("A venda foi salva, mas nao consegui remover o pedido sugerido. Voce pode dispensar manualmente depois.");
+    }
+    activeSuggestedOrderId = null;
+  } else if (activeSuggestedOrderId && !wasEditingSale) {
+    alert("A venda ficou salva neste navegador, mas nao confirmei a sincronizacao com o painel. O pedido sugerido continuara na lista para revisao.");
+  }
+
   event.currentTarget.reset();
   setToday(event.currentTarget.querySelector('[name="date"]'));
   resetFormButton(event.currentTarget, "Salvar venda");
@@ -935,6 +1144,120 @@ function renderSalesList() {
       </tbody>
     </table>
   `, "Sem vendas registradas ainda.");
+}
+
+function renderSuggestedOrders() {
+  const rows = suggestedOrders.flatMap((order) =>
+    (order.items || []).map((item, index) => ({
+      order,
+      item,
+      itemIndex: index,
+    })),
+  );
+
+  if (rows.length === 0) {
+    els.suggestedOrderList.innerHTML = emptyState("Nenhum pedido sugerido pelo site no momento.");
+    return;
+  }
+
+  els.suggestedOrderList.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Recebido</th>
+          <th>Sabor</th>
+          <th>Qtd.</th>
+          <th>Total do item</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(({ order, item, itemIndex }) => `
+          <tr class="suggested-row">
+            <td>${formatDateTime(order.createdAt)}</td>
+            <td>${item.name}</td>
+            <td>${item.quantity}</td>
+            <td>${formatCurrency(Number(item.quantity || 0) * Number(item.price || 0))}</td>
+            <td>
+              <div class="row-actions">
+                <button type="button" class="table-action" data-suggested-action="fill" data-order-id="${order.id}" data-item-index="${itemIndex}">Preencher venda</button>
+                <button type="button" class="table-action danger" data-suggested-action="dismiss" data-order-id="${order.id}">Dispensar</button>
+              </div>
+            </td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+async function handleSuggestedOrderAction(action, orderId, itemIndex) {
+  if (action === "fill") {
+    fillSuggestedSale(orderId, itemIndex);
+    return;
+  }
+
+  if (action === "dismiss") {
+    const updated = await updateSuggestedOrderStatus(orderId, "dismissed");
+    if (updated) {
+      suggestedOrders = suggestedOrders.filter((order) => order.id !== orderId);
+      if (activeSuggestedOrderId === orderId) activeSuggestedOrderId = null;
+      renderSuggestedOrders();
+      bindActionButtons();
+    } else {
+      alert("Nao consegui dispensar esse pedido agora. Tente novamente.");
+    }
+  }
+}
+
+function fillSuggestedSale(orderId, itemIndex) {
+  const order = suggestedOrders.find((item) => item.id === orderId);
+  const orderItem = order?.items?.[itemIndex];
+  if (!orderItem) return;
+
+  const recipe = findRecipeForSuggestedItem(orderItem);
+  if (!recipe) {
+    alert(`Nao encontrei um sabor chamado "${orderItem.name}" no painel. Cadastre ou ajuste o nome do sabor antes de salvar essa venda.`);
+    return;
+  }
+
+  activeSuggestedOrderId = orderId;
+  editing.saleId = null;
+  const form = els.saleForm;
+  form.recipeId.value = recipe.id;
+  form.quantity.value = Number(orderItem.quantity || 1);
+  form.amount.value = Number(orderItem.quantity || 1) * Number(orderItem.price || recipe.salePrice || 0);
+  form.date.value = new Date().toISOString().slice(0, 10);
+  form.notes.value = `Pedido sugerido pelo site em ${formatDateTime(order.createdAt)}.`;
+  setFormButton(form, "Salvar venda sugerida");
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function findRecipeForSuggestedItem(orderItem) {
+  const suggestedName = normalizeText(orderItem.name);
+  const suggestedNameLoose = simplifyProductName(orderItem.name);
+  return state.recipes.find((recipe) => {
+    const recipeName = normalizeText(recipe.name);
+    return recipeName === suggestedName || recipeName === suggestedNameLoose;
+  });
+}
+
+function simplifyProductName(value) {
+  return normalizeText(value).replace(/\b(de|da|do|das|dos)\b/g, "").replace(/\s+/g, " ").trim();
+}
+
+async function updateSuggestedOrderStatus(orderId, status) {
+  try {
+    const response = await fetch(API_URLS.orders, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "updateStatus", id: orderId, status }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 function renderInventorySummary() {
@@ -1440,8 +1763,12 @@ function actionButtons(type, id) {
 
 function bindActionButtons() {
   document.querySelectorAll(".table-action").forEach((button) => {
-    button.onclick = () => {
-      const { action, type, id } = button.dataset;
+    button.onclick = async () => {
+      const { action, type, id, suggestedAction, orderId, itemIndex } = button.dataset;
+      if (suggestedAction) {
+        await handleSuggestedOrderAction(suggestedAction, Number(orderId), Number(itemIndex || 0));
+        return;
+      }
       if (action === "edit") handleEdit(type, id);
       if (action === "delete") handleDelete(type, id);
     };
@@ -1493,6 +1820,7 @@ function handleEdit(type, id) {
   if (type === "sale") {
     const sale = state.sales.find((item) => item.id === id);
     if (!sale) return;
+    activeSuggestedOrderId = null;
     editing.saleId = id;
     const form = els.saleForm;
     form.recipeId.value = sale.recipeId;
@@ -1566,6 +1894,17 @@ function formatNumber(value) {
 function formatDate(value) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("pt-BR").format(new Date(`${value}T00:00:00`));
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  const normalized = String(value).includes("T") ? value : String(value).replace(" ", "T");
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
 }
 
 function emptyState(text) {

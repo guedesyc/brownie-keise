@@ -66,6 +66,16 @@ function ensure_schema(PDO $pdo): void
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
     );
+
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS suggested_orders (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            data LONGTEXT NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+    );
 }
 
 function validate_state($state): array

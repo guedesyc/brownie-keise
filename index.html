@@ -13,6 +13,65 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <section id="sales-page" class="sales-page">
+      <header class="sales-header">
+        <a class="sales-brand" href="#top" aria-label="Brownie da Keise">
+          <img src="./assets/logo-full-brown.png" alt="Brownie da Keise" />
+        </a>
+      </header>
+
+      <main class="sales-main">
+        <section class="sales-hero" id="top">
+          <div class="sales-hero-copy">
+            <div>
+              <p class="eyebrow">Browneria artesanal</p>
+              <h1>Brownies intensos, molhadinhos e feitos para pedir de novo.</h1>
+            </div>
+            <a class="sales-hero-action" href="#cardapio">Ver cardápio</a>
+          </div>
+          <div class="sales-carousel" aria-label="Fotos dos brownies">
+            <div class="sales-carousel-track">
+              <img src="./assets/produtos/tradicional-hero.png" alt="Brownies tradicionais sobre tábua" />
+              <img src="./assets/produtos/brookies.png" alt="Brownie Brookies" />
+              <img src="./assets/produtos/doce-de-leite-coco.png" alt="Brownie de doce de leite com coco" />
+              <img src="./assets/produtos/mix-castanhas.png" alt="Brownie mix de castanhas" />
+              <img src="./assets/produtos/charge.png" alt="Brownie Charge" />
+              <img src="./assets/produtos/tradicional-hero.png" alt="" />
+              <img src="./assets/produtos/brookies.png" alt="" />
+              <img src="./assets/produtos/doce-de-leite-coco.png" alt="" />
+              <img src="./assets/produtos/mix-castanhas.png" alt="" />
+              <img src="./assets/produtos/charge.png" alt="" />
+            </div>
+          </div>
+        </section>
+
+        <section class="sales-menu" id="cardapio">
+          <div class="sales-section-title">
+            <p class="eyebrow">Cardápio</p>
+            <h2>Escolha seus brownies</h2>
+            <p>Preços finais por unidade. Selecione as quantidades e finalize seu pedido pelo WhatsApp.</p>
+          </div>
+
+          <div id="product-grid" class="product-grid"></div>
+        </section>
+
+        <aside class="order-card" aria-label="Resumo do pedido">
+          <div>
+            <span>Seu pedido</span>
+            <strong id="order-summary">Nenhum brownie selecionado</strong>
+          </div>
+          <div class="order-actions">
+            <strong id="order-total">R$ 0,00</strong>
+            <button id="buy-brownie" class="buy-button" type="button">Comprar meu brownie!</button>
+          </div>
+        </aside>
+
+        <footer class="sales-footer">
+          <button id="open-admin-login" class="admin-access-button" type="button">Acesso admin</button>
+        </footer>
+      </main>
+    </section>
+
     <section id="admin-login" class="login-screen" hidden>
       <div class="login-brand-panel">
         <div class="login-brand">
@@ -131,6 +190,16 @@
             <article class="kpi-card">
               <span class="kpi-label">Saldo financeiro</span>
               <strong id="kpi-balance">R$ 0,00</strong>
+            </article>
+          </div>
+
+          <div class="panel-grid single">
+            <article class="panel">
+              <div class="panel-head">
+                <h3>Pedidos sugeridos pelo site</h3>
+                <span class="tag warm">revisar</span>
+              </div>
+              <div id="suggested-order-list" class="table-host"></div>
             </article>
           </div>
 
