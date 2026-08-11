@@ -70,6 +70,7 @@ const serverSync = {
 const saleCart = new Map();
 let suggestedOrders = [];
 let activeSuggestedOrderId = null;
+let serverSavePromise = Promise.resolve(true);
 
 const seedState = {
   ingredients: [
@@ -171,7 +172,10 @@ function loadState() {
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   if (serverSync.enabled && serverSync.authenticated) {
-    return saveServerState();
+    serverSavePromise = serverSavePromise
+      .catch(() => false)
+      .then(() => saveServerState());
+    return serverSavePromise;
   }
   return Promise.resolve(true);
 }
@@ -428,11 +432,8 @@ function setLoginLoading(isLoading) {
 }
 
 async function saveServerState() {
-  if (serverSync.saving) {
-    serverSync.pending = true;
-    return false;
-  }
   serverSync.saving = true;
+  serverSync.pending = false;
 
   let saved = false;
   try {
@@ -449,10 +450,6 @@ async function saveServerState() {
     serverSync.lastError = "server_save_failed";
   } finally {
     serverSync.saving = false;
-    if (serverSync.pending) {
-      serverSync.pending = false;
-      saveServerState();
-    }
   }
   return saved;
 }
@@ -728,13 +725,30 @@ function handleMovementSubmit(event) {
 
 async function handleSaleSubmit(event) {
   event.preventDefault();
+  const form = event.currentTarget;
+  const submitButton = form.querySelector('button[type="submit"]');
+  const originalButtonText = submitButton?.textContent || "Salvar venda";
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "Salvando...";
+  }
+
   const data = new FormData(event.currentTarget);
   const recipe = state.recipes.find((item) => item.id === data.get("recipeId"));
-  if (!recipe) return;
+  if (!recipe) {
+    alert("Selecione um sabor antes de salvar a venda.");
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = originalButtonText;
+    }
+    return;
+  }
 
   const quantity = Number(data.get("quantity"));
   const amount = Number(data.get("amount") || recipe.salePrice * quantity);
   const wasEditingSale = Boolean(editing.saleId);
+  const previousSales = structuredClone(state.sales);
+  const previousEditingSaleId = editing.saleId;
 
   const sale = {
     id: editing.saleId || crypto.randomUUID(),
@@ -751,24 +765,37 @@ async function handleSaleSubmit(event) {
   } else {
     state.sales.unshift(sale);
   }
-  const saleSaved = await saveState();
+  try {
+    const saleSaved = await saveState();
 
-  if (activeSuggestedOrderId && !wasEditingSale && saleSaved !== false) {
-    const updated = await updateSuggestedOrderStatus(activeSuggestedOrderId, "converted");
-    if (updated) {
-      suggestedOrders = suggestedOrders.filter((order) => order.id !== activeSuggestedOrderId);
-    } else {
-      alert("A venda foi salva, mas nao consegui remover o pedido sugerido. Voce pode dispensar manualmente depois.");
+    if (saleSaved === false) {
+      state.sales = previousSales;
+      editing.saleId = previousEditingSaleId;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      alert("Nao consegui salvar a venda no banco agora. Tente novamente em alguns segundos.");
+      return;
     }
-    activeSuggestedOrderId = null;
-  } else if (activeSuggestedOrderId && !wasEditingSale) {
-    alert("A venda ficou salva neste navegador, mas nao confirmei a sincronizacao com o painel. O pedido sugerido continuara na lista para revisao.");
-  }
 
-  event.currentTarget.reset();
-  setToday(event.currentTarget.querySelector('[name="date"]'));
-  resetFormButton(event.currentTarget, "Salvar venda");
-  renderAll();
+    if (activeSuggestedOrderId && !wasEditingSale) {
+      const updated = await updateSuggestedOrderStatus(activeSuggestedOrderId, "converted");
+      if (updated) {
+        suggestedOrders = suggestedOrders.filter((order) => order.id !== activeSuggestedOrderId);
+      } else {
+        alert("A venda foi salva, mas nao consegui remover o pedido sugerido. Voce pode dispensar manualmente depois.");
+      }
+      activeSuggestedOrderId = null;
+    }
+
+    form.reset();
+    setToday(form.querySelector('[name="date"]'));
+    resetFormButton(form, "Salvar venda");
+    renderAll();
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = "Salvar venda";
+    }
+  }
 }
 
 function appendRecipeItem(prefill = {}) {
