@@ -776,10 +776,12 @@ async function handleSaleSubmit(event) {
       return;
     }
 
+    let nextSuggestedOrder = null;
     if (activeSuggestedOrderId && !wasEditingSale) {
       const updated = await updateSuggestedOrderStatus(activeSuggestedOrderId, "converted");
       if (updated) {
         suggestedOrders = suggestedOrders.filter((order) => order.id !== activeSuggestedOrderId);
+        nextSuggestedOrder = getSuggestedOrderRows()[0] || null;
       } else {
         alert("A venda foi salva, mas nao consegui remover o pedido sugerido. Voce pode dispensar manualmente depois.");
       }
@@ -790,10 +792,13 @@ async function handleSaleSubmit(event) {
     setToday(form.querySelector('[name="date"]'));
     resetFormButton(form, "Salvar venda");
     renderAll();
+    if (nextSuggestedOrder) {
+      fillSuggestedSale(nextSuggestedOrder.order.id, nextSuggestedOrder.itemIndex, { scroll: false });
+    }
   } finally {
     if (submitButton) {
       submitButton.disabled = false;
-      submitButton.textContent = "Salvar venda";
+      submitButton.textContent = activeSuggestedOrderId ? "Salvar venda sugerida" : "Salvar venda";
     }
   }
 }
@@ -1188,13 +1193,7 @@ function renderSalesList() {
 }
 
 function renderSuggestedOrders() {
-  const rows = suggestedOrders.flatMap((order) =>
-    (order.items || []).map((item, index) => ({
-      order,
-      item,
-      itemIndex: index,
-    })),
-  );
+  const rows = getSuggestedOrderRows();
 
   if (rows.length === 0) {
     els.suggestedOrderList.innerHTML = emptyState("Nenhum pedido sugerido pelo site no momento.");
@@ -1232,6 +1231,16 @@ function renderSuggestedOrders() {
   `;
 }
 
+function getSuggestedOrderRows() {
+  return suggestedOrders.flatMap((order) =>
+    (order.items || []).map((item, index) => ({
+      order,
+      item,
+      itemIndex: index,
+    })),
+  );
+}
+
 async function handleSuggestedOrderAction(action, orderId, itemIndex) {
   if (action === "fill") {
     fillSuggestedSale(orderId, itemIndex);
@@ -1251,7 +1260,7 @@ async function handleSuggestedOrderAction(action, orderId, itemIndex) {
   }
 }
 
-function fillSuggestedSale(orderId, itemIndex) {
+function fillSuggestedSale(orderId, itemIndex, options = {}) {
   const order = suggestedOrders.find((item) => item.id === orderId);
   const orderItem = order?.items?.[itemIndex];
   if (!orderItem) return;
@@ -1272,7 +1281,9 @@ function fillSuggestedSale(orderId, itemIndex) {
   form.date.value = new Date().toISOString().slice(0, 10);
   form.notes.value = `Pedido sugerido pelo site em ${formatDateTime(order.createdAt)}.`;
   setFormButton(form, "Salvar venda sugerida");
-  window.setTimeout(() => form.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  if (options.scroll !== false) {
+    window.setTimeout(() => form.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }
 }
 
 function findRecipeForSuggestedItem(orderItem) {
