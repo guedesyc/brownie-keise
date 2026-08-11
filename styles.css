@@ -35,7 +35,7 @@ body {
 
 .sales-page {
   min-height: 100vh;
-  padding: 16px 24px 44px;
+  padding: 26px 24px 44px;
   background:
     radial-gradient(circle at 18% 12%, rgba(244, 182, 138, 0.46), transparent 26%),
     radial-gradient(circle at 84% 8%, rgba(111, 43, 17, 0.16), transparent 24%),
@@ -44,25 +44,26 @@ body {
 
 .sales-header {
   max-width: 1180px;
-  margin: 0 auto 4px;
+  margin: 0 auto 18px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.sales-brand {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.sales-mantra {
+  max-width: 680px;
+  margin: 0;
   color: var(--accent-deep);
-  text-decoration: none;
-  font-weight: 800;
-}
-
-.sales-brand img {
-  width: min(720px, 86vw);
-  height: 150px;
-  object-fit: contain;
+  font-family: "Luckiest Guy", "Fraunces", serif;
+  font-size: clamp(42px, 8vw, 96px);
+  line-height: 0.82;
+  letter-spacing: 0;
+  text-align: center;
+  text-transform: uppercase;
+  text-wrap: balance;
+  text-shadow:
+    0 2px 0 #ffe6b9,
+    0 12px 28px rgba(111, 43, 17, 0.18);
 }
 
 .admin-access-button,
@@ -355,9 +356,47 @@ body {
 }
 
 .sales-footer {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  margin-top: 34px;
+  padding-top: 16px;
+  text-align: center;
+}
+
+.sales-footer .admin-access-button {
+  justify-self: end;
+}
+
+.footer-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.footer-brand img {
+  width: min(320px, 72vw);
+  height: 82px;
+  object-fit: contain;
+}
+
+.sales-social-links {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 22px;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.sales-social-links a {
+  color: rgba(47, 22, 13, 0.68);
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.sales-social-links a:hover {
+  color: var(--accent-deep);
+  text-decoration: underline;
 }
 
 .login-screen {
@@ -1005,16 +1044,16 @@ th {
 
 @media (max-width: 720px) {
   .sales-page {
-    padding: 12px 14px 32px;
+    padding: 18px 14px 32px;
   }
 
   .sales-header {
-    margin-bottom: 4px;
+    margin-bottom: 14px;
   }
 
-  .sales-brand img {
-    width: min(420px, 88vw);
-    height: 108px;
+  .sales-mantra {
+    max-width: 360px;
+    font-size: clamp(42px, 14vw, 58px);
   }
 
   .sales-hero-copy {
