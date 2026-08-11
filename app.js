@@ -1,6 +1,7 @@
 const STORAGE_KEY = "brownie-da-keise-app-v2";
 const API_URLS = {
   login: "./api/login.php",
+  logout: "./api/logout.php",
   state: "./api/state.php",
   orders: "./api/orders.php",
 };
@@ -281,17 +282,8 @@ async function createSuggestedOrder(items) {
 }
 
 async function openAdminArea() {
-  const ready = await initializeServerState();
-  if (!ready) {
-    showLoginScreen();
-    return;
-  }
-
-  ensureSampleRecipes();
-  await loadSuggestedOrders();
-  saveState();
-  renderAll();
-  showAdminShell();
+  await logoutServerSession();
+  showLoginScreen();
 }
 
 async function loadSuggestedOrders() {
@@ -402,6 +394,25 @@ function showSalesPage() {
   els.adminShell.hidden = true;
 }
 
+async function returnToSalesPage() {
+  await logoutServerSession();
+  showSalesPage();
+}
+
+async function logoutServerSession() {
+  try {
+    await fetch(API_URLS.logout, { method: "POST", credentials: "same-origin" });
+  } catch {
+    // The UI should still return to the public page if the logout request fails.
+  } finally {
+    serverSync.enabled = false;
+    serverSync.authenticated = false;
+    serverSync.needsLogin = true;
+    suggestedOrders = [];
+    activeSuggestedOrderId = null;
+  }
+}
+
 function showLoginError(message = "Usuário ou senha inválidos.") {
   els.adminLoginError.textContent = message;
   els.adminLoginError.hidden = false;
@@ -464,12 +475,8 @@ function bindForms() {
   els.buyBrownie.addEventListener("click", handleBuyBrownie);
   els.openAdminLogin.addEventListener("click", openAdminArea);
   els.adminLoginForm.addEventListener("submit", handleAdminLogin);
-  els.backToSales.addEventListener("click", () => {
-    showSalesPage();
-  });
-  els.backToSalesFromAdmin.addEventListener("click", () => {
-    showSalesPage();
-  });
+  els.backToSales.addEventListener("click", returnToSalesPage);
+  els.backToSalesFromAdmin.addEventListener("click", returnToSalesPage);
   els.ingredientForm.addEventListener("submit", handleIngredientSubmit);
   els.recipeForm.addEventListener("submit", handleRecipeSubmit);
   els.movementForm.addEventListener("submit", handleMovementSubmit);
