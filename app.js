@@ -5,7 +5,7 @@ const API_URLS = {
   state: "./api/state.php",
   orders: "./api/orders.php",
 };
-const WHATSAPP_NUMBER = "71992713498";
+const WHATSAPP_NUMBER = "71982371552";
 const SALE_PRODUCTS = [
   {
     id: "tradicional",
