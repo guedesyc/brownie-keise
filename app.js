@@ -121,6 +121,7 @@ const els = {
   adminLoginSubmit: document.getElementById("admin-login-submit"),
   adminShell: document.getElementById("admin-shell"),
   backToSales: document.getElementById("back-to-sales"),
+  backToSalesFromAdmin: document.getElementById("back-to-sales-from-admin"),
   sections: document.querySelectorAll(".section"),
   navLinks: document.querySelectorAll(".nav-link"),
   ingredientForm: document.getElementById("ingredient-form"),
@@ -461,6 +462,9 @@ function bindForms() {
   els.openAdminLogin.addEventListener("click", openAdminArea);
   els.adminLoginForm.addEventListener("submit", handleAdminLogin);
   els.backToSales.addEventListener("click", () => {
+    showSalesPage();
+  });
+  els.backToSalesFromAdmin.addEventListener("click", () => {
     showSalesPage();
   });
   els.ingredientForm.addEventListener("submit", handleIngredientSubmit);
