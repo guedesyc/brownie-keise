@@ -232,8 +232,10 @@ function renderSaleProducts() {
     return;
   }
 
-  els.productGrid.innerHTML = products.map((product) => `
-    <article class="product-card">
+  els.productGrid.innerHTML = products.map((product) => {
+    const isFeaturedTag = String(product.tag || "").toLowerCase().includes("destaque");
+    return `
+    <article class="product-card${isFeaturedTag ? " product-card-featured" : ""}">
       <div class="product-media">
         <img src="${product.image}" alt="Brownie ${product.name}" />
         <span>${product.tag}</span>
@@ -253,7 +255,8 @@ function renderSaleProducts() {
         </div>
       </div>
     </article>
-  `).join("");
+  `;
+  }).join("");
 }
 
 function renderSiteHighlights() {
