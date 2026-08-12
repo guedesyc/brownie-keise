@@ -56,6 +56,7 @@ const defaultSiteConfig = {
   products: SALE_PRODUCTS.map((product) => ({ ...product, active: true })),
   upcomingProducts: [],
 };
+const PRODUCT_IMAGE_FALLBACK = Object.fromEntries(SALE_PRODUCTS.map((product) => [product.id, product.image]));
 const editing = {
   ingredientId: null,
   recipeId: null,
@@ -210,6 +211,10 @@ function getActiveSaleProducts() {
   return getSiteConfig().products.filter((product) => product.active !== false);
 }
 
+function getProductFallbackImage(product) {
+  return PRODUCT_IMAGE_FALLBACK[product?.id] || product?.image || "./assets/produtos/tradicional.png";
+}
+
 async function loadPublicSiteConfig() {
   try {
     const response = await fetch(API_URLS.publicState, { credentials: "same-origin" });
@@ -234,10 +239,11 @@ function renderSaleProducts() {
 
   els.productGrid.innerHTML = products.map((product) => {
     const isFeaturedTag = String(product.tag || "").toLowerCase().includes("destaque");
+    const fallbackImage = getProductFallbackImage(product);
     return `
     <article class="product-card${isFeaturedTag ? " product-card-featured" : ""}">
       <div class="product-media">
-        <img src="${product.image}" alt="Brownie ${product.name}" />
+        <img src="${escapeAttribute(product.image)}" alt="Brownie ${escapeAttribute(product.name)}" onerror="this.onerror=null; this.src='${escapeAttribute(fallbackImage)}';" />
         <span>${product.tag}</span>
       </div>
       <div class="product-body">
@@ -633,14 +639,28 @@ async function uploadSiteImage(file) {
   const formData = new FormData();
   formData.append("image", file);
 
-  const response = await fetch(API_URLS.upload, {
-    method: "POST",
-    credentials: "same-origin",
-    body: formData,
+  try {
+    const response = await fetch(API_URLS.upload, {
+      method: "POST",
+      credentials: "same-origin",
+      body: formData,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok && payload.path) return payload.path;
+  } catch {
+    // If hosting cannot persist the upload publicly, keep the image in the saved site config.
+  }
+
+  return readImageAsDataUrl(file);
+}
+
+function readImageAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("image_read_failed"));
+    reader.readAsDataURL(file);
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload.path) throw new Error(payload.error || "upload_failed");
-  return payload.path;
 }
 
 async function saveServerState() {
@@ -1462,7 +1482,7 @@ function renderSiteConfigEditor() {
   els.siteProductEditor.innerHTML = config.products.map((product) => `
     <article class="site-editor-card" data-product-id="${product.id}">
       <div class="site-editor-media">
-        <img src="${product.image}" alt="${product.name}" />
+        <img src="${escapeAttribute(product.image)}" alt="${escapeAttribute(product.name)}" onerror="this.onerror=null; this.src='${escapeAttribute(getProductFallbackImage(product))}';" />
       </div>
       <div class="site-editor-fields">
         <label>
