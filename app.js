@@ -5,6 +5,7 @@ const API_URLS = {
   publicState: "./api/public-state.php",
   state: "./api/state.php",
   orders: "./api/orders.php",
+  upload: "./api/upload.php",
 };
 const WHATSAPP_NUMBER = "71982371552";
 const SALE_PRODUCTS = [
@@ -79,6 +80,7 @@ let suggestedOrders = [];
 let activeSuggestedOrderId = null;
 let serverSavePromise = Promise.resolve(true);
 let siteConfigSaveTimer = null;
+let siteConfigStatusTimer = null;
 
 const seedState = {
   ingredients: [
@@ -149,6 +151,7 @@ const els = {
   saleList: document.getElementById("sale-list"),
   suggestedOrderList: document.getElementById("suggested-order-list"),
   siteCopyForm: document.getElementById("site-copy-form"),
+  siteConfigStatus: document.getElementById("site-config-status"),
   siteProductForm: document.getElementById("site-product-form"),
   siteProductEditor: document.getElementById("site-product-editor"),
   upcomingProductForm: document.getElementById("upcoming-product-form"),
@@ -598,6 +601,45 @@ function setLoginLoading(isLoading) {
   els.adminLoginSubmit.textContent = isLoading ? "Entrando..." : "Entrar no painel →";
 }
 
+function startButtonLoading(button, loadingText = "Salvando...") {
+  if (!button) return () => {};
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = loadingText;
+  return () => {
+    button.disabled = false;
+    button.textContent = originalText;
+  };
+}
+
+function showSiteConfigStatus(message, type = "saving") {
+  if (!els.siteConfigStatus) return;
+  if (siteConfigStatusTimer) window.clearTimeout(siteConfigStatusTimer);
+  els.siteConfigStatus.textContent = message;
+  els.siteConfigStatus.className = `form-status ${type}`;
+  els.siteConfigStatus.hidden = false;
+
+  if (type !== "saving") {
+    siteConfigStatusTimer = window.setTimeout(() => {
+      els.siteConfigStatus.hidden = true;
+    }, 3200);
+  }
+}
+
+async function uploadSiteImage(file) {
+  const formData = new FormData();
+  formData.append("image", file);
+
+  const response = await fetch(API_URLS.upload, {
+    method: "POST",
+    credentials: "same-origin",
+    body: formData,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.path) throw new Error(payload.error || "upload_failed");
+  return payload.path;
+}
+
 async function saveServerState() {
   serverSync.saving = true;
   serverSync.pending = false;
@@ -649,6 +691,7 @@ function bindForms() {
   els.siteProductForm.addEventListener("submit", handleSiteProductSubmit);
   els.siteProductEditor.addEventListener("input", handleSiteProductInput);
   els.siteProductEditor.addEventListener("change", handleSiteProductInput);
+  els.siteProductEditor.addEventListener("change", handleSiteProductImageUpload);
   els.upcomingProductForm.addEventListener("submit", handleUpcomingProductSubmit);
   els.addRecipeItem.addEventListener("click", () => appendRecipeItem());
   els.exportData.addEventListener("click", exportData);
@@ -1446,6 +1489,11 @@ function renderSiteConfigEditor() {
           Imagem
           <input data-site-field="image" value="${escapeAttribute(product.image)}" />
         </label>
+        <label class="full">
+          Trocar imagem
+          <input type="file" accept="image/png,image/jpeg,image/webp" data-site-image-upload />
+          <span class="field-hint">Envie uma nova foto para atualizar este brownie automaticamente.</span>
+        </label>
         ${product.custom ? `
           <div class="full actions">
             <button type="button" class="ghost-button danger" data-site-product-delete="${product.id}">Excluir brownie</button>
@@ -1495,33 +1543,53 @@ function renderUpcomingProductList() {
   });
 }
 
-function handleSiteCopySubmit(event) {
+async function handleSiteCopySubmit(event) {
   event.preventDefault();
+  const stopLoading = startButtonLoading(event.submitter, "Salvando...");
   const config = getSiteConfig();
   state.siteConfig = {
     ...config,
     heroTitle: event.currentTarget.heroTitle.value.trim() || defaultSiteConfig.heroTitle,
     featuredProductId: event.currentTarget.featuredProductId.value,
   };
-  saveSiteConfig({ immediate: true });
+  const saved = await saveSiteConfig({ immediate: true });
+  stopLoading();
+  showSiteConfigStatus(saved ? "Textos salvos com sucesso." : "Não foi possível salvar agora.", saved ? "success" : "error");
 }
 
-function handleSiteProductSubmit(event) {
+async function handleSiteProductSubmit(event) {
   event.preventDefault();
+  const form = event.currentTarget;
+  const stopLoading = startButtonLoading(event.submitter, "Adicionando...");
   const data = new FormData(event.currentTarget);
   const config = getSiteConfig();
+  let image = String(data.get("image") || "").trim();
+
+  try {
+    const file = form.imageFile?.files?.[0];
+    if (file) {
+      showSiteConfigStatus("Enviando imagem...", "saving");
+      image = await uploadSiteImage(file);
+    }
+  } catch {
+    stopLoading();
+    showSiteConfigStatus("Não foi possível enviar a imagem. Tente novamente.", "error");
+    return;
+  }
+
   const product = normalizeSiteProduct({
     id: createProductId(data.get("name"), config.products),
     name: data.get("name"),
     price: data.get("price"),
     tag: data.get("tag") || "Novo",
-    image: data.get("image"),
+    image,
     description: data.get("description"),
     active: true,
     custom: true,
   });
   if (!product) {
-    alert("Preencha nome, imagem e descricao para adicionar o brownie.");
+    stopLoading();
+    showSiteConfigStatus("Preencha nome, imagem e descrição para adicionar o brownie.", "error");
     return;
   }
 
@@ -1529,8 +1597,10 @@ function handleSiteProductSubmit(event) {
     ...config,
     products: [...config.products, product],
   };
-  event.currentTarget.reset();
-  saveSiteConfig({ immediate: true });
+  form.reset();
+  const saved = await saveSiteConfig({ immediate: true });
+  stopLoading();
+  showSiteConfigStatus(saved ? "Brownie adicionado ao cardápio." : "Brownie adicionado localmente, mas não foi salvo no servidor.", saved ? "success" : "error");
 }
 
 function handleSiteProductInput(event) {
@@ -1552,28 +1622,63 @@ function handleSiteProductInput(event) {
   saveSiteConfig({ renderEditor: false });
 }
 
-function deleteSiteProduct(id) {
+async function handleSiteProductImageUpload(event) {
+  const input = event.target.closest("[data-site-image-upload]");
+  if (!input || !input.files?.[0]) return;
+
+  const card = input.closest("[data-product-id]");
+  const productId = card?.dataset.productId;
+  if (!productId) return;
+
+  input.disabled = true;
+  showSiteConfigStatus("Enviando imagem...", "saving");
+
+  try {
+    const image = await uploadSiteImage(input.files[0]);
+    const config = getSiteConfig();
+    const products = config.products.map((product) =>
+      product.id === productId ? { ...product, image } : product,
+    );
+    state.siteConfig = { ...config, products };
+    const saved = await saveSiteConfig({ immediate: true });
+    showSiteConfigStatus(saved ? "Imagem atualizada com sucesso." : "Imagem enviada, mas não foi possível salvar no servidor.", saved ? "success" : "error");
+  } catch {
+    showSiteConfigStatus("Não foi possível enviar a imagem. Tente outra foto.", "error");
+  } finally {
+    input.disabled = false;
+    input.value = "";
+  }
+}
+
+async function deleteSiteProduct(id) {
   const config = getSiteConfig();
   const confirmed = window.confirm("Remover este brownie do cardapio?");
   if (!confirmed) return;
+  showSiteConfigStatus("Salvando...", "saving");
   state.siteConfig = {
     ...config,
     featuredProductId: config.featuredProductId === id ? "" : config.featuredProductId,
     products: config.products.filter((product) => product.id !== id),
   };
   saleCart.delete(id);
-  saveSiteConfig({ immediate: true });
+  const saved = await saveSiteConfig({ immediate: true });
+  showSiteConfigStatus(saved ? "Brownie removido do cardápio." : "Não foi possível salvar a remoção agora.", saved ? "success" : "error");
 }
 
-function handleUpcomingProductSubmit(event) {
+async function handleUpcomingProductSubmit(event) {
   event.preventDefault();
+  const stopLoading = startButtonLoading(event.submitter, "Adicionando...");
   const data = new FormData(event.currentTarget);
   const next = normalizeUpcomingProduct({
     name: data.get("name"),
     eta: data.get("eta"),
     description: data.get("description"),
   });
-  if (!next) return;
+  if (!next) {
+    stopLoading();
+    showSiteConfigStatus("Informe ao menos o nome do próximo brownie.", "error");
+    return;
+  }
 
   const config = getSiteConfig();
   state.siteConfig = {
@@ -1581,30 +1686,47 @@ function handleUpcomingProductSubmit(event) {
     upcomingProducts: [...config.upcomingProducts, next],
   };
   event.currentTarget.reset();
-  saveSiteConfig({ immediate: true });
+  const saved = await saveSiteConfig({ immediate: true });
+  stopLoading();
+  showSiteConfigStatus(saved ? "Próximo brownie adicionado." : "Não foi possível salvar agora.", saved ? "success" : "error");
 }
 
-function deleteUpcomingProduct(id) {
+async function deleteUpcomingProduct(id) {
   const config = getSiteConfig();
+  showSiteConfigStatus("Salvando...", "saving");
   state.siteConfig = {
     ...config,
     upcomingProducts: config.upcomingProducts.filter((product) => product.id !== id),
   };
-  saveSiteConfig({ immediate: true });
+  const saved = await saveSiteConfig({ immediate: true });
+  showSiteConfigStatus(saved ? "Próximo brownie removido." : "Não foi possível salvar a remoção agora.", saved ? "success" : "error");
 }
 
-function saveSiteConfig(options = {}) {
+async function saveSiteConfig(options = {}) {
   state.siteConfig = normalizeSiteConfig(state.siteConfig);
   if (siteConfigSaveTimer) window.clearTimeout(siteConfigSaveTimer);
   if (options.immediate) {
-    saveState();
+    showSiteConfigStatus("Salvando...", "saving");
+    const saved = await saveState();
+    if (!saved) serverSync.pending = true;
+    renderSaleProducts();
+    renderSiteHighlights();
+    updateOrderSummary();
+    if (options.renderEditor !== false) renderSiteConfigEditor();
+    return saved;
   } else {
-    siteConfigSaveTimer = window.setTimeout(() => saveState(), 450);
+    showSiteConfigStatus("Salvando...", "saving");
+    siteConfigSaveTimer = window.setTimeout(async () => {
+      const saved = await saveState();
+      if (!saved) serverSync.pending = true;
+      showSiteConfigStatus(saved ? "Alteração salva." : "Não foi possível salvar agora.", saved ? "success" : "error");
+    }, 450);
   }
   renderSaleProducts();
   renderSiteHighlights();
   updateOrderSummary();
   if (options.renderEditor !== false) renderSiteConfigEditor();
+  return true;
 }
 
 function getSuggestedOrderRows() {

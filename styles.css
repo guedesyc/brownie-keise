@@ -920,10 +920,52 @@ select {
   color: var(--text);
 }
 
+input[type="file"] {
+  padding: 12px 14px;
+  line-height: 1.4;
+}
+
 input:focus,
 select:focus {
   outline: 2px solid rgba(165, 77, 23, 0.18);
   border-color: rgba(165, 77, 23, 0.44);
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.form-status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.form-status[hidden] {
+  display: none;
+}
+
+.form-status.saving {
+  color: var(--accent-deep);
+  background: rgba(209, 127, 35, 0.14);
+}
+
+.form-status.success {
+  color: var(--olive);
+  background: rgba(125, 143, 70, 0.14);
+}
+
+.form-status.error {
+  color: var(--danger);
+  background: rgba(179, 60, 46, 0.12);
 }
 
 .actions {
@@ -939,6 +981,14 @@ select:focus {
   color: white;
   background: linear-gradient(135deg, var(--accent-deep), var(--accent));
   box-shadow: 0 12px 28px rgba(165, 77, 23, 0.25);
+}
+
+.primary-button:disabled,
+.ghost-button:disabled,
+.table-action:disabled {
+  cursor: wait;
+  opacity: 0.68;
+  transform: none;
 }
 
 .ingredient-builder {
