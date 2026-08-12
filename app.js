@@ -2,6 +2,7 @@ const STORAGE_KEY = "brownie-da-keise-app-v2";
 const API_URLS = {
   login: "./api/login.php",
   logout: "./api/logout.php",
+  publicState: "./api/public-state.php",
   state: "./api/state.php",
   orders: "./api/orders.php",
 };
@@ -48,6 +49,12 @@ const SALE_PRODUCTS = [
     tag: "Recheado",
   },
 ];
+const defaultSiteConfig = {
+  heroTitle: "Brownies intensos, molhadinhos e feitos para pedir de novo.",
+  featuredProductId: "",
+  products: SALE_PRODUCTS.map((product) => ({ ...product, active: true })),
+  upcomingProducts: [],
+};
 const editing = {
   ingredientId: null,
   recipeId: null,
@@ -71,6 +78,7 @@ const saleCart = new Map();
 let suggestedOrders = [];
 let activeSuggestedOrderId = null;
 let serverSavePromise = Promise.resolve(true);
+let siteConfigSaveTimer = null;
 
 const seedState = {
   ingredients: [
@@ -106,6 +114,7 @@ const seedState = {
   recipes: [],
   movements: [],
   sales: [],
+  siteConfig: structuredClone(defaultSiteConfig),
 };
 
 let state = loadState();
@@ -113,6 +122,9 @@ let state = loadState();
 const els = {
   salesPage: document.getElementById("sales-page"),
   productGrid: document.getElementById("product-grid"),
+  salesHeroTitle: document.getElementById("sales-hero-title"),
+  featuredProduct: document.getElementById("featured-product"),
+  upcomingProducts: document.getElementById("upcoming-products"),
   orderSummary: document.getElementById("order-summary"),
   orderTotal: document.getElementById("order-total"),
   buyBrownie: document.getElementById("buy-brownie"),
@@ -136,6 +148,10 @@ const els = {
   saleForm: document.getElementById("sale-form"),
   saleList: document.getElementById("sale-list"),
   suggestedOrderList: document.getElementById("suggested-order-list"),
+  siteCopyForm: document.getElementById("site-copy-form"),
+  siteProductEditor: document.getElementById("site-product-editor"),
+  upcomingProductForm: document.getElementById("upcoming-product-form"),
+  upcomingProductList: document.getElementById("upcoming-product-list"),
   financeList: document.getElementById("finance-list"),
   inventorySummary: document.getElementById("inventory-summary"),
   salesSummary: document.getElementById("sales-summary"),
@@ -154,7 +170,9 @@ init();
 async function init() {
   bindNavigation();
   bindForms();
+  await loadPublicSiteConfig();
   renderSaleProducts();
+  renderSiteHighlights();
   updateOrderSummary();
   showSalesPage();
 }
@@ -180,8 +198,37 @@ function saveState() {
   return Promise.resolve(true);
 }
 
+function getSiteConfig() {
+  return normalizeSiteConfig(state.siteConfig);
+}
+
+function getActiveSaleProducts() {
+  return getSiteConfig().products.filter((product) => product.active !== false);
+}
+
+async function loadPublicSiteConfig() {
+  try {
+    const response = await fetch(API_URLS.publicState, { credentials: "same-origin" });
+    if (!response.ok) throw new Error("public_state_failed");
+    const payload = await response.json();
+    if (payload.siteConfig) {
+      state.siteConfig = normalizeSiteConfig(payload.siteConfig);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+  } catch {
+    state.siteConfig = normalizeSiteConfig(state.siteConfig);
+  }
+}
+
 function renderSaleProducts() {
-  els.productGrid.innerHTML = SALE_PRODUCTS.map((product) => `
+  const products = getActiveSaleProducts();
+  els.salesHeroTitle.textContent = getSiteConfig().heroTitle;
+  if (products.length === 0) {
+    els.productGrid.innerHTML = emptyState("Cardápio em atualização. Volte em breve.");
+    return;
+  }
+
+  els.productGrid.innerHTML = products.map((product) => `
     <article class="product-card">
       <div class="product-media">
         <img src="${product.image}" alt="Brownie ${product.name}" />
@@ -205,6 +252,48 @@ function renderSaleProducts() {
   `).join("");
 }
 
+function renderSiteHighlights() {
+  const config = getSiteConfig();
+  const featured = config.products.find((product) => product.id === config.featuredProductId && product.active !== false);
+
+  if (featured) {
+    els.featuredProduct.hidden = false;
+    els.featuredProduct.innerHTML = `
+      <div>
+        <span>Destaque do mês</span>
+        <h3>${featured.name}</h3>
+        <p>${featured.description}</p>
+      </div>
+      <strong>${formatCurrency(featured.price)}</strong>
+    `;
+  } else {
+    els.featuredProduct.hidden = true;
+    els.featuredProduct.innerHTML = "";
+  }
+
+  if (config.upcomingProducts.length > 0) {
+    els.upcomingProducts.hidden = false;
+    els.upcomingProducts.innerHTML = `
+      <div class="sales-section-title compact">
+        <p class="eyebrow">Em breve</p>
+        <h2>Próximos brownies</h2>
+      </div>
+      <div class="upcoming-grid">
+        ${config.upcomingProducts.map((product) => `
+          <article>
+            <strong>${product.name}</strong>
+            ${product.eta ? `<span>${product.eta}</span>` : ""}
+            ${product.description ? `<p>${product.description}</p>` : ""}
+          </article>
+        `).join("")}
+      </div>
+    `;
+  } else {
+    els.upcomingProducts.hidden = true;
+    els.upcomingProducts.innerHTML = "";
+  }
+}
+
 function handleProductClick(event) {
   const button = event.target.closest("[data-cart-action]");
   if (!button) return;
@@ -226,7 +315,7 @@ function updateOrderSummary() {
   let itemCount = 0;
   let total = 0;
 
-  SALE_PRODUCTS.forEach((product) => {
+  getActiveSaleProducts().forEach((product) => {
     const quantity = saleCart.get(product.id) || 0;
     itemCount += quantity;
     total += quantity * product.price;
@@ -241,7 +330,7 @@ function updateOrderSummary() {
 }
 
 async function handleBuyBrownie() {
-  const selected = SALE_PRODUCTS
+  const selected = getActiveSaleProducts()
     .map((product) => ({ ...product, quantity: saleCart.get(product.id) || 0 }))
     .filter((product) => product.quantity > 0);
 
@@ -307,6 +396,46 @@ function normalizeState(nextState) {
     recipes: Array.isArray(nextState?.recipes) ? nextState.recipes : [],
     movements: Array.isArray(nextState?.movements) ? nextState.movements : [],
     sales: Array.isArray(nextState?.sales) ? nextState.sales : [],
+    siteConfig: normalizeSiteConfig(nextState?.siteConfig),
+  };
+}
+
+function normalizeSiteConfig(config) {
+  const productById = new Map((Array.isArray(config?.products) ? config.products : []).map((product) => [product.id, product]));
+  const products = defaultSiteConfig.products.map((fallback) => {
+    const saved = productById.get(fallback.id) || {};
+    return {
+      ...fallback,
+      name: String(saved.name || fallback.name).trim(),
+      price: Number(saved.price ?? fallback.price) || 0,
+      image: String(saved.image || fallback.image).trim(),
+      description: String(saved.description || fallback.description).trim(),
+      tag: String(saved.tag || fallback.tag).trim(),
+      active: saved.active !== false,
+    };
+  });
+
+  const productIds = new Set(products.map((product) => product.id));
+  const featuredProductId = productIds.has(config?.featuredProductId) ? config.featuredProductId : "";
+
+  return {
+    heroTitle: String(config?.heroTitle || defaultSiteConfig.heroTitle).trim(),
+    featuredProductId,
+    products,
+    upcomingProducts: Array.isArray(config?.upcomingProducts)
+      ? config.upcomingProducts.map(normalizeUpcomingProduct).filter(Boolean)
+      : [],
+  };
+}
+
+function normalizeUpcomingProduct(product) {
+  const name = String(product?.name || "").trim();
+  if (!name) return null;
+  return {
+    id: String(product?.id || crypto.randomUUID()),
+    name,
+    eta: String(product?.eta || "").trim(),
+    description: String(product?.description || "").trim(),
   };
 }
 
@@ -478,6 +607,10 @@ function bindForms() {
   els.recipeForm.addEventListener("submit", handleRecipeSubmit);
   els.movementForm.addEventListener("submit", handleMovementSubmit);
   els.saleForm.addEventListener("submit", handleSaleSubmit);
+  els.siteCopyForm.addEventListener("submit", handleSiteCopySubmit);
+  els.siteProductEditor.addEventListener("input", handleSiteProductInput);
+  els.siteProductEditor.addEventListener("change", handleSiteProductInput);
+  els.upcomingProductForm.addEventListener("submit", handleUpcomingProductSubmit);
   els.addRecipeItem.addEventListener("click", () => appendRecipeItem());
   els.exportData.addEventListener("click", exportData);
   els.exportExcel.addEventListener("click", exportExcel);
@@ -617,6 +750,7 @@ function renderAll() {
   renderMovementList();
   renderSalesList();
   renderSuggestedOrders();
+  renderSiteConfigEditor();
   renderInventorySummary();
   renderSalesSummary();
   renderFinance();
@@ -1231,6 +1365,157 @@ function renderSuggestedOrders() {
   `;
 }
 
+function renderSiteConfigEditor() {
+  const config = getSiteConfig();
+  els.siteCopyForm.heroTitle.value = config.heroTitle;
+  els.siteCopyForm.featuredProductId.innerHTML = [
+    '<option value="">Sem destaque</option>',
+    ...config.products.map((product) => `<option value="${product.id}">${product.name}</option>`),
+  ].join("");
+  els.siteCopyForm.featuredProductId.value = config.featuredProductId;
+
+  els.siteProductEditor.innerHTML = config.products.map((product) => `
+    <article class="site-editor-card" data-product-id="${product.id}">
+      <div class="site-editor-media">
+        <img src="${product.image}" alt="${product.name}" />
+      </div>
+      <div class="site-editor-fields">
+        <label>
+          Exibir no site
+          <select data-site-field="active">
+            <option value="true"${product.active !== false ? " selected" : ""}>Sim</option>
+            <option value="false"${product.active === false ? " selected" : ""}>Não</option>
+          </select>
+        </label>
+        <label>
+          Nome
+          <input data-site-field="name" value="${escapeAttribute(product.name)}" />
+        </label>
+        <label>
+          Preço
+          <input data-site-field="price" type="number" min="0" step="0.01" value="${product.price}" />
+        </label>
+        <label>
+          Etiqueta
+          <input data-site-field="tag" value="${escapeAttribute(product.tag)}" />
+        </label>
+        <label class="full">
+          Descrição
+          <input data-site-field="description" value="${escapeAttribute(product.description)}" />
+        </label>
+      </div>
+    </article>
+  `).join("");
+
+  renderUpcomingProductList();
+}
+
+function renderUpcomingProductList() {
+  const upcoming = getSiteConfig().upcomingProducts;
+  if (upcoming.length === 0) {
+    els.upcomingProductList.innerHTML = emptyState("Nenhum próximo brownie cadastrado.");
+    return;
+  }
+
+  els.upcomingProductList.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Previsão</th>
+          <th>Descrição</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${upcoming.map((product) => `
+          <tr>
+            <td>${product.name}</td>
+            <td>${product.eta || "-"}</td>
+            <td>${product.description || "-"}</td>
+            <td><button type="button" class="table-action danger" data-upcoming-delete="${product.id}">Excluir</button></td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+  els.upcomingProductList.querySelectorAll("[data-upcoming-delete]").forEach((button) => {
+    button.onclick = () => deleteUpcomingProduct(button.dataset.upcomingDelete);
+  });
+}
+
+function handleSiteCopySubmit(event) {
+  event.preventDefault();
+  const config = getSiteConfig();
+  state.siteConfig = {
+    ...config,
+    heroTitle: event.currentTarget.heroTitle.value.trim() || defaultSiteConfig.heroTitle,
+    featuredProductId: event.currentTarget.featuredProductId.value,
+  };
+  saveSiteConfig({ immediate: true });
+}
+
+function handleSiteProductInput(event) {
+  const field = event.target.dataset.siteField;
+  if (!field) return;
+
+  const card = event.target.closest("[data-product-id]");
+  const productId = card?.dataset.productId;
+  const config = getSiteConfig();
+  const products = config.products.map((product) => {
+    if (product.id !== productId) return product;
+    const value = event.target.value;
+    return {
+      ...product,
+      [field]: field === "active" ? value === "true" : field === "price" ? Number(value || 0) : value,
+    };
+  });
+  state.siteConfig = { ...config, products };
+  saveSiteConfig({ renderEditor: false });
+}
+
+function handleUpcomingProductSubmit(event) {
+  event.preventDefault();
+  const data = new FormData(event.currentTarget);
+  const next = normalizeUpcomingProduct({
+    name: data.get("name"),
+    eta: data.get("eta"),
+    description: data.get("description"),
+  });
+  if (!next) return;
+
+  const config = getSiteConfig();
+  state.siteConfig = {
+    ...config,
+    upcomingProducts: [...config.upcomingProducts, next],
+  };
+  event.currentTarget.reset();
+  saveSiteConfig({ immediate: true });
+}
+
+function deleteUpcomingProduct(id) {
+  const config = getSiteConfig();
+  state.siteConfig = {
+    ...config,
+    upcomingProducts: config.upcomingProducts.filter((product) => product.id !== id),
+  };
+  saveSiteConfig({ immediate: true });
+}
+
+function saveSiteConfig(options = {}) {
+  state.siteConfig = normalizeSiteConfig(state.siteConfig);
+  if (siteConfigSaveTimer) window.clearTimeout(siteConfigSaveTimer);
+  if (options.immediate) {
+    saveState();
+  } else {
+    siteConfigSaveTimer = window.setTimeout(() => saveState(), 450);
+  }
+  renderSaleProducts();
+  renderSiteHighlights();
+  updateOrderSummary();
+  if (options.renderEditor !== false) renderSiteConfigEditor();
+}
+
 function getSuggestedOrderRows() {
   return suggestedOrders.flatMap((order) =>
     (order.items || []).map((item, index) => ({
@@ -1782,6 +2067,7 @@ function importData(event) {
       state.recipes = parsed.recipes || [];
       state.movements = parsed.movements || [];
       state.sales = parsed.sales || [];
+      state.siteConfig = normalizeSiteConfig(parsed.siteConfig);
       saveState();
       renderAll();
     } catch {
@@ -1800,6 +2086,7 @@ function resetData() {
   state.recipes = [];
   state.movements = [];
   state.sales = [];
+  state.siteConfig = structuredClone(defaultSiteConfig);
   ensureSampleRecipes();
   saveState();
   renderAll();
@@ -1958,6 +2245,14 @@ function formatDateTime(value) {
     dateStyle: "short",
     timeStyle: "short",
   }).format(date);
+}
+
+function escapeAttribute(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function emptyState(text) {

@@ -12,7 +12,7 @@
       href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;700&family=Inter:wght@400;500;600;700&family=Luckiest+Guy&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20260810-8" />
+    <link rel="stylesheet" href="./styles.css?v=20260812-1" />
   </head>
   <body>
     <section id="sales-page" class="sales-page">
@@ -25,7 +25,7 @@
           <div class="sales-hero-copy">
             <div>
               <p class="eyebrow">Browneria artesanal</p>
-              <h1>Brownies intensos, molhadinhos e feitos para pedir de novo.</h1>
+              <h1 id="sales-hero-title">Brownies intensos, molhadinhos e feitos para pedir de novo.</h1>
             </div>
             <a class="sales-hero-action" href="#cardapio">Ver cardápio</a>
           </div>
@@ -52,6 +52,8 @@
             <p>Preços finais por unidade. Selecione as quantidades e finalize seu pedido pelo WhatsApp.</p>
           </div>
 
+          <div id="featured-product" class="featured-product" hidden></div>
+          <div id="upcoming-products" class="upcoming-products" hidden></div>
           <div id="product-grid" class="product-grid"></div>
         </section>
 
@@ -142,6 +144,7 @@
           <button class="nav-link" data-section="estoque">Estoque</button>
           <button class="nav-link" data-section="vendas">Vendas</button>
           <button class="nav-link" data-section="financeiro">Financeiro</button>
+          <button class="nav-link" data-section="site-config">Configuração do site</button>
         </nav>
 
         <div class="sidebar-filter">
@@ -483,6 +486,75 @@
             </article>
           </div>
         </section>
+
+        <section id="site-config" class="section">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Vitrine</p>
+              <h2>Configuração do site de venda</h2>
+              <p class="muted">Edite os brownies exibidos no cardápio, escolha o destaque do mês e informe próximos sabores.</p>
+            </div>
+          </div>
+
+          <div class="panel-grid single">
+            <article class="panel">
+              <div class="panel-head">
+                <h3>Textos da vitrine</h3>
+                <span class="tag warm">site</span>
+              </div>
+              <form id="site-copy-form" class="form-grid">
+                <label class="full">
+                  Frase principal
+                  <input name="heroTitle" required />
+                </label>
+                <label class="full">
+                  Destaque do mês
+                  <select name="featuredProductId"></select>
+                </label>
+                <div class="full actions">
+                  <button type="submit" class="primary-button">Salvar textos</button>
+                </div>
+              </form>
+            </article>
+          </div>
+
+          <div class="panel-grid single">
+            <article class="panel">
+              <div class="panel-head">
+                <h3>Brownies do cardápio</h3>
+                <span class="tag">edição</span>
+              </div>
+              <div id="site-product-editor" class="site-editor-list"></div>
+            </article>
+          </div>
+
+          <div class="panel-grid single">
+            <article class="panel">
+              <div class="panel-head">
+                <h3>Próximos brownies</h3>
+                <span class="tag warm">em breve</span>
+              </div>
+              <form id="upcoming-product-form" class="form-grid">
+                <label>
+                  Nome
+                  <input name="name" placeholder="Ex.: Ninho com Nutella" required />
+                </label>
+                <label>
+                  Previsão
+                  <input name="eta" placeholder="Ex.: Setembro" />
+                </label>
+                <label class="full">
+                  Descrição
+                  <input name="description" placeholder="Pequena descrição para aparecer no site" />
+                </label>
+                <div class="full actions">
+                  <button type="submit" class="primary-button">Adicionar próximo brownie</button>
+                </div>
+              </form>
+              <div id="upcoming-product-list" class="table-host"></div>
+            </article>
+          </div>
+        </section>
       </main>
     </div>
 
@@ -494,6 +566,6 @@
       </div>
     </template>
 
-    <script src="./app.js?v=20260810-8"></script>
+    <script src="./app.js?v=20260812-1"></script>
   </body>
 </html>

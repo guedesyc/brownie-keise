@@ -89,5 +89,6 @@ function validate_state($state): array
         'recipes' => array_values(is_array($state['recipes'] ?? null) ? $state['recipes'] : []),
         'movements' => array_values(is_array($state['movements'] ?? null) ? $state['movements'] : []),
         'sales' => array_values(is_array($state['sales'] ?? null) ? $state['sales'] : []),
+        'siteConfig' => is_array($state['siteConfig'] ?? null) ? $state['siteConfig'] : null,
     ];
 }
