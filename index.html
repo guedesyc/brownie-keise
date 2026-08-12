@@ -12,7 +12,7 @@
       href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;700&family=Inter:wght@400;500;600;700&family=Luckiest+Guy&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20260812-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260812-2" />
   </head>
   <body>
     <section id="sales-page" class="sales-page">
@@ -524,6 +524,31 @@
                 <h3>Brownies do cardápio</h3>
                 <span class="tag">edição</span>
               </div>
+              <form id="site-product-form" class="form-grid site-product-form">
+                <label>
+                  Nome
+                  <input name="name" placeholder="Ex.: Brownie de Ninho" required />
+                </label>
+                <label>
+                  Preço
+                  <input name="price" type="number" min="0" step="0.01" placeholder="12.00" required />
+                </label>
+                <label>
+                  Etiqueta
+                  <input name="tag" placeholder="Ex.: Novo" />
+                </label>
+                <label>
+                  Imagem
+                  <input name="image" placeholder="./assets/produtos/nome-da-foto.png" required />
+                </label>
+                <label class="full">
+                  Descrição
+                  <input name="description" placeholder="Descrição que aparece no cardápio" required />
+                </label>
+                <div class="full actions">
+                  <button type="submit" class="primary-button">Adicionar brownie ao cardápio</button>
+                </div>
+              </form>
               <div id="site-product-editor" class="site-editor-list"></div>
             </article>
           </div>
@@ -566,6 +591,6 @@
       </div>
     </template>
 
-    <script src="./app.js?v=20260812-1"></script>
+    <script src="./app.js?v=20260812-2"></script>
   </body>
 </html>

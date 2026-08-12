@@ -149,6 +149,7 @@ const els = {
   saleList: document.getElementById("sale-list"),
   suggestedOrderList: document.getElementById("suggested-order-list"),
   siteCopyForm: document.getElementById("site-copy-form"),
+  siteProductForm: document.getElementById("site-product-form"),
   siteProductEditor: document.getElementById("site-product-editor"),
   upcomingProductForm: document.getElementById("upcoming-product-form"),
   upcomingProductList: document.getElementById("upcoming-product-list"),
@@ -401,10 +402,11 @@ function normalizeState(nextState) {
 }
 
 function normalizeSiteConfig(config) {
-  const productById = new Map((Array.isArray(config?.products) ? config.products : []).map((product) => [product.id, product]));
-  const products = defaultSiteConfig.products.map((fallback) => {
+  const savedProducts = Array.isArray(config?.products) ? config.products : [];
+  const productById = new Map(savedProducts.map((product) => [product.id, product]));
+  const baseProducts = defaultSiteConfig.products.map((fallback) => {
     const saved = productById.get(fallback.id) || {};
-    return {
+    return normalizeSiteProduct({
       ...fallback,
       name: String(saved.name || fallback.name).trim(),
       price: Number(saved.price ?? fallback.price) || 0,
@@ -412,8 +414,15 @@ function normalizeSiteConfig(config) {
       description: String(saved.description || fallback.description).trim(),
       tag: String(saved.tag || fallback.tag).trim(),
       active: saved.active !== false,
-    };
+      custom: false,
+    }, fallback);
   });
+  const defaultIds = new Set(defaultSiteConfig.products.map((product) => product.id));
+  const customProducts = savedProducts
+    .filter((product) => product?.id && !defaultIds.has(product.id))
+    .map((product) => normalizeSiteProduct(product))
+    .filter(Boolean);
+  const products = [...baseProducts, ...customProducts];
 
   const productIds = new Set(products.map((product) => product.id));
   const featuredProductId = productIds.has(config?.featuredProductId) ? config.featuredProductId : "";
@@ -426,6 +435,35 @@ function normalizeSiteConfig(config) {
       ? config.upcomingProducts.map(normalizeUpcomingProduct).filter(Boolean)
       : [],
   };
+}
+
+function normalizeSiteProduct(product, fallback = null) {
+  const name = String(product?.name || fallback?.name || "").trim();
+  const image = String(product?.image || fallback?.image || "").trim();
+  const description = String(product?.description || fallback?.description || "").trim();
+  if (!name || !image || !description) return null;
+  return {
+    id: String(product?.id || createProductId(name, [])),
+    name,
+    price: Number(product?.price ?? fallback?.price ?? 0) || 0,
+    image,
+    description,
+    tag: String(product?.tag || fallback?.tag || "Novo").trim(),
+    active: product?.active !== false,
+    custom: product?.custom === true || !fallback,
+  };
+}
+
+function createProductId(name, products = getSiteConfig().products) {
+  const base = normalizeText(name).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "brownie";
+  const existing = new Set(products.map((product) => product.id));
+  let id = base;
+  let index = 2;
+  while (existing.has(id)) {
+    id = `${base}-${index}`;
+    index += 1;
+  }
+  return id;
 }
 
 function normalizeUpcomingProduct(product) {
@@ -608,6 +646,7 @@ function bindForms() {
   els.movementForm.addEventListener("submit", handleMovementSubmit);
   els.saleForm.addEventListener("submit", handleSaleSubmit);
   els.siteCopyForm.addEventListener("submit", handleSiteCopySubmit);
+  els.siteProductForm.addEventListener("submit", handleSiteProductSubmit);
   els.siteProductEditor.addEventListener("input", handleSiteProductInput);
   els.siteProductEditor.addEventListener("change", handleSiteProductInput);
   els.upcomingProductForm.addEventListener("submit", handleUpcomingProductSubmit);
@@ -1403,9 +1442,21 @@ function renderSiteConfigEditor() {
           Descrição
           <input data-site-field="description" value="${escapeAttribute(product.description)}" />
         </label>
+        <label class="full">
+          Imagem
+          <input data-site-field="image" value="${escapeAttribute(product.image)}" />
+        </label>
+        ${product.custom ? `
+          <div class="full actions">
+            <button type="button" class="ghost-button danger" data-site-product-delete="${product.id}">Excluir brownie</button>
+          </div>
+        ` : ""}
       </div>
     </article>
   `).join("");
+  els.siteProductEditor.querySelectorAll("[data-site-product-delete]").forEach((button) => {
+    button.onclick = () => deleteSiteProduct(button.dataset.siteProductDelete);
+  });
 
   renderUpcomingProductList();
 }
@@ -1455,6 +1506,33 @@ function handleSiteCopySubmit(event) {
   saveSiteConfig({ immediate: true });
 }
 
+function handleSiteProductSubmit(event) {
+  event.preventDefault();
+  const data = new FormData(event.currentTarget);
+  const config = getSiteConfig();
+  const product = normalizeSiteProduct({
+    id: createProductId(data.get("name"), config.products),
+    name: data.get("name"),
+    price: data.get("price"),
+    tag: data.get("tag") || "Novo",
+    image: data.get("image"),
+    description: data.get("description"),
+    active: true,
+    custom: true,
+  });
+  if (!product) {
+    alert("Preencha nome, imagem e descricao para adicionar o brownie.");
+    return;
+  }
+
+  state.siteConfig = {
+    ...config,
+    products: [...config.products, product],
+  };
+  event.currentTarget.reset();
+  saveSiteConfig({ immediate: true });
+}
+
 function handleSiteProductInput(event) {
   const field = event.target.dataset.siteField;
   if (!field) return;
@@ -1472,6 +1550,19 @@ function handleSiteProductInput(event) {
   });
   state.siteConfig = { ...config, products };
   saveSiteConfig({ renderEditor: false });
+}
+
+function deleteSiteProduct(id) {
+  const config = getSiteConfig();
+  const confirmed = window.confirm("Remover este brownie do cardapio?");
+  if (!confirmed) return;
+  state.siteConfig = {
+    ...config,
+    featuredProductId: config.featuredProductId === id ? "" : config.featuredProductId,
+    products: config.products.filter((product) => product.id !== id),
+  };
+  saleCart.delete(id);
+  saveSiteConfig({ immediate: true });
 }
 
 function handleUpcomingProductSubmit(event) {
